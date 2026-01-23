@@ -112,4 +112,6 @@ class App:
                     self.window.restore()
                 if self.requested_size:
                     self.window.resizeTo(*self.requested_size)
-            await asyncio.sleep(1)
+                if self.window.position != (0, 0):
+                    self.window.moveTo(0, 0)
+            await asyncio.sleep(0.5)

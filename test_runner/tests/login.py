@@ -6,13 +6,15 @@ import pyautogui
 from pyautogui import ImageNotFoundException, Point
 from pyscreeze import Box
 
+REGION = (0, 0, 800, 600)
+
 
 async def clickImage(imagePath: Path, timeout: int = 5):
     start_time = time.time()
     while True:
         try:
             locationOrNull = pyautogui.locateOnScreen(
-                str(imagePath.absolute()), confidence=0.8
+                str(imagePath.absolute()), confidence=0.8, region=REGION
             )
             assert locationOrNull is not None
             location: Box = locationOrNull
@@ -38,7 +40,7 @@ async def assertImage(imagePath: Path, timeout: int = 5) -> Box:
     while True:
         try:
             locationOrNull = pyautogui.locateOnScreen(
-                str(imagePath.absolute()), confidence=0.8
+                str(imagePath.absolute()), confidence=0.8, region=REGION
             )
             assert locationOrNull is not None
             location: Box = locationOrNull
@@ -51,25 +53,34 @@ async def assertImage(imagePath: Path, timeout: int = 5) -> Box:
         await asyncio.sleep(0.5)
 
 
-async def runTest():
-    # Load .env file
-    env = {}
-    with open(".env") as f:
-        for line in f:
-            key, value = line.strip().split("=", 1)
-            env[key] = value
+async def screenshot(name: str, test_id: str):
+    base_dir = Path.home() / "Documents" / "visual_testing" / "screenshots"
+    image_path = base_dir / test_id / (name + ".png")
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    pyautogui.screenshot(str(image_path.absolute()), REGION)
+    # benchmark screenshot time
+    start_time = time.time()
+    for _ in range(10):
+        pyautogui.screenshot(str(image_path.absolute()), REGION)
+    end_time = time.time()
+    avg_time = (end_time - start_time) / 10
+    print(f"Average screenshot time: {avg_time:.4f} seconds")
 
+
+async def runTest(username: str, password: str, test_id: str):
     IMGDIR = Path("test_runner/tests/images")
 
     # Login
     await clickImage(IMGDIR / "LoginLink.png")
+    await screenshot("login_screen", test_id)
     await clickImage(IMGDIR / "Email.png")
-    pyautogui.typewrite(env.get("USER"), interval=0.05)
+    pyautogui.typewrite(username, interval=0.05)
     await clickImage(IMGDIR / "Password.png")
-    pyautogui.typewrite(env.get("PASSWORD"), interval=0.05)
+    pyautogui.typewrite(password, interval=0.05)
     await clickImage(IMGDIR / "LoginButton.png")
 
     # Game center
+    await screenshot("game_center_screen", test_id)
     await clickImage(IMGDIR / "Game_center.png", timeout=15)
     await assertImage(IMGDIR / "Please_connect.png", timeout=15)
     await clickImage(IMGDIR / "Back.png")

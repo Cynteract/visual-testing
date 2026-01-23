@@ -7,6 +7,8 @@ from pathlib import Path
 import github
 import requests
 
+from test_runner.__main__ import TestRunnerArguments, main
+
 
 class TestResult:
     def __init__(self, passed: bool, details: str):
@@ -15,9 +17,9 @@ class TestResult:
 
 
 class Service:
-    def __init__(self, env):
-        assert env.get("GITHUB_PAT") is not None, "GITHUB_PAT not found in environment"
-        self.github_token = env.get("GITHUB_PAT")
+    def __init__(self, github_token: str, test_runner_args: TestRunnerArguments):
+        self.github_token = github_token
+        self.test_runner_args = test_runner_args
         self.repo = github.Github(login_or_token=self.github_token).get_repo(
             "Cynteract/cynteract-app"
         )
@@ -54,15 +56,28 @@ class Service:
         )
         return version_info
 
-    async def run_test(self, version: str) -> TestResult:
+    async def run_commit_test(self, commit_sha: str) -> TestResult:
         try:
-            await self.get_app_folder(version)
+            version_info = await self.get_version_info(
+                "--ci-development", "--commitish=" + commit_sha
+            )
+            _, file_name_base, _ = version_info.split(",")
+            app_folder = await self.get_app_folder(file_name_base)
+            self.test_runner_args.binary_path = str(app_folder / "Cynteract.exe")
+            self.test_runner_args.test_id = file_name_base
+            await main(self.test_runner_args)
         except Exception as e:
             return TestResult(passed=False, details=str(e))
         return TestResult(passed=True, details="All tests passed")
 
     async def get_app_folder(self, version: str) -> Path:
-        app_folder = Path.home() / "Downloads" / "builds" / f"Cynteract-{version}"
+        app_folder = (
+            Path.home()
+            / "Documents"
+            / "visual_testing"
+            / "builds"
+            / f"Cynteract-{version}"
+        )
         if not app_folder.exists():
             zip_path = app_folder.with_name(app_folder.name + ".zip")
             if not zip_path.exists():
@@ -89,23 +104,23 @@ class Service:
             if status.context == "visual regression test":
                 commit_status = status
                 break
-        if commit_status is None:
-            version_info = await self.get_version_info(
-                "--ci-development", "--commitish=" + commit.sha
+        if commit_status is None or True:
+            commit_status = commit.create_status(
+                state="pending",
+                context="visual regression test",
+                description="Robot tests are running...",
+                target_url="https://cynteract.com",
             )
-            version_string, file_name_base, bundle_version_code = version_info.split(
-                ","
-            )
-            test_result = await self.run_test(file_name_base)
+            test_result = await self.run_commit_test(commit.sha)
             print(
                 f"Test result for commit {commit.sha}: {'PASSED' if test_result.passed else 'FAILED'} - {test_result.details}"
             )
-            # commit.create_status(
-            #     state="success" if test_result.passed else "failure",
-            #     context="visual regression test",
-            #     description=test_result.details,
-            #     target_url="https://cynteract.com",
-            # )
+            commit_status = commit.create_status(
+                state="success" if test_result.passed else "failure",
+                context="visual regression test",
+                description=test_result.details,
+                target_url="https://cynteract.com",
+            )
 
     async def run(self):
         # poll action runs

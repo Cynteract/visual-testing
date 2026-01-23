@@ -1,0 +1,62 @@
+import argparse
+import asyncio
+from dataclasses import dataclass
+from pathlib import Path
+
+from test_runner.app import App
+from test_runner.tests import login
+
+
+@dataclass
+class TestRunnerArguments:
+    binary_path: str | None
+    username: str
+    password: str
+    test_id: str = "default"
+
+
+async def main(args: TestRunnerArguments):
+    assert args.binary_path is not None, "Binary path must be provided"
+    print(f"Starting tests with binary at {args.binary_path}")
+    app_path = Path(args.binary_path)
+    app = App(app_path)
+    state = await app.open()
+    app.resize(800, 600)
+    app.enforce_size()
+    if state == App.State.Launching:
+        # wait for app to finish launching
+        await asyncio.sleep(12)
+
+    await login.runTest(args.username, args.password, args.test_id)
+
+
+if __name__ == "__main__":
+    # arguments --binary-path <path> and --username <username> and --password <password>
+    parser = argparse.ArgumentParser(description="Run tests on Cynteract App.")
+    parser.add_argument(
+        "--binary-path",
+        type=str,
+        required=True,
+        help="Path to the Cynteract App binary.",
+    )
+    parser.add_argument(
+        "--username", type=str, required=True, help="Username for login."
+    )
+    parser.add_argument(
+        "--password", type=str, required=True, help="Password for login."
+    )
+    parser.add_argument(
+        "--test-id",
+        type=str,
+        required=False,
+        default="default",
+        help="Test ID for screenshots.",
+    )
+    args = parser.parse_args()
+    arguments = TestRunnerArguments(
+        binary_path=args.binary_path,
+        username=args.username,
+        password=args.password,
+        test_id=args.test_id,
+    )
+    asyncio.run(main(arguments))
