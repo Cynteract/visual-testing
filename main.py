@@ -30,7 +30,8 @@ async def main():
             env[key] = value
 
     service = Service(env)
-    await service.run()
+    # await service.run()
+    await service.process_commit("f7a3782")
 
 
 if __name__ == "__main__":
