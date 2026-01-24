@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from test_runner.app import App
-from test_runner.tests import login
+from test_runner.tests.login import LoginTest
 
 
 @dataclass
@@ -25,9 +25,12 @@ async def main(args: TestRunnerArguments):
     app.enforce_size()
     if state == App.State.Launching:
         # wait for app to finish launching
-        await asyncio.sleep(12)
-
-    await login.runTest(args.username, args.password, args.test_id)
+        await asyncio.sleep(10)
+    else:
+        # wait for app to come to foreground
+        await asyncio.sleep(1)
+    test = LoginTest(app)
+    await test.runTest(args.username, args.password, args.test_id)
 
 
 if __name__ == "__main__":

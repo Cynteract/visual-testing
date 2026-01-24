@@ -4,8 +4,15 @@ import time
 from enum import Enum
 from pathlib import Path
 
+import cv2
+import numpy
+import PIL.ImageGrab
 import psutil
 import pywinctl
+
+
+class MultipleMatchesFoundException(Exception):
+    pass
 
 
 class App:
@@ -115,3 +122,80 @@ class App:
                 if self.window.position != (0, 0):
                     self.window.moveTo(0, 0)
             await asyncio.sleep(0.5)
+
+    def screenshot(self, save_path: Path) -> None:
+        """
+        Takes a screenshot of the app window and saves it to the given path.
+        """
+        assert self.window, "App window is not available. Call open() first."
+        with PIL.ImageGrab.grab() as img:
+            img.save(save_path)
+
+    def _get_bounding_box(self) -> tuple[int, int, int, int]:
+        """
+        Returns the bounding box of the app window.
+        """
+        assert self.window, "App window is not available. Call open() first."
+        client_frame = self.window.getClientFrame()
+        return (
+            client_frame.left,
+            client_frame.top,
+            client_frame.right,
+            client_frame.bottom,
+        )
+
+    def locate(
+        self, small_image_path: Path, confidence: float = 0.8
+    ) -> tuple[int, int, int, int] | None:
+        """
+        Locates the given image on the app window screenshot. Returns the bounding box if found, otherwise None.
+
+        Returns: (x1, y1, x2, y2) of the found image on the screen or None
+        """
+        assert self.window, "App window is not available. Call open() first."
+        bbox = self._get_bounding_box()
+
+        # load images, cv2 uses numpy arrays in BGR format
+        # grabbing window only does not work on all windows, see https://github.com/python-pillow/Pillow/pull/8516#issuecomment-3794640267
+        with PIL.ImageGrab.grab(bbox=bbox) as window_grab:
+            window_image = numpy.array(window_grab)
+            large_image = cv2.cvtColor(window_image, cv2.COLOR_RGB2BGR)
+        small_image = cv2.imread(small_image_path)
+        assert (
+            small_image is not None
+        ), f"Could not load small image at {small_image_path}"
+        assert (
+            large_image.shape[0] >= small_image.shape[0]
+        ), "small image width exceeds the large image width"
+        assert (
+            large_image.shape[1] >= small_image.shape[1]
+        ), "small image height exceeds the large image height"
+
+        # https://docs.opencv.org/4.13.0/d4/dc6/tutorial_py_template_matching.html
+        match = cv2.matchTemplate(large_image, small_image, cv2.TM_CCOEFF_NORMED)
+        yloc, xloc = numpy.where(match >= confidence)
+        # cluster matches with a pixel distance < 3
+        clustered_xloc: list[int] = []
+        clustered_yloc: list[int] = []
+        for x, y in zip(xloc, yloc):
+            # if any existing clustered point is within 3 pixels, skip this point
+            if any(
+                abs(x - cx) < 3 and abs(y - cy) < 3
+                for (cx, cy) in zip(clustered_xloc, clustered_yloc)
+            ):
+                continue
+            clustered_xloc.append(x)
+            clustered_yloc.append(y)
+        if len(clustered_xloc) == 0:
+            return None
+        elif len(clustered_xloc) > 1:
+            raise MultipleMatchesFoundException(
+                f"Multiple ({len(clustered_xloc)}) matches found for image {small_image_path} with confidence {confidence}"
+            )
+        else:
+            return (
+                clustered_xloc[0] + bbox[0],
+                clustered_yloc[0] + bbox[1],
+                clustered_xloc[0] + bbox[0] + small_image.shape[1],
+                clustered_yloc[0] + bbox[1] + small_image.shape[0],
+            )

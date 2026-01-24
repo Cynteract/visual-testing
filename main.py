@@ -1,8 +1,10 @@
 import asyncio
 
 from github_service.__main__ import GithubServiceArguments
-from github_service.__main__ import main as github_service_main
+
+# from github_service.__main__ import main as github_service_main
 from test_runner.__main__ import TestRunnerArguments
+from test_runner.__main__ import main as test_runner_main
 
 
 async def main():
@@ -18,14 +20,17 @@ async def main():
     assert env.get("PASSWORD") is not None, "PASSWORD not found in environment"
 
     test_runner_args = TestRunnerArguments(
-        username=env["USERNAME"], password=env["PASSWORD"], binary_path=None
+        username=env["USERNAME"],
+        password=env["PASSWORD"],
+        binary_path=env.get("BINARY_PATH"),
     )
     github_service_args = GithubServiceArguments(
         github_pat=env["GITHUB_PAT"],
         test_runner_args=test_runner_args,
         single_run_commit=env["SINGLE_RUN_COMMIT"],
     )
-    await github_service_main(github_service_args)
+    await test_runner_main(test_runner_args)
+    # await github_service_main(github_service_args)
 
 
 if __name__ == "__main__":
