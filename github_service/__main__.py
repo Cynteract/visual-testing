@@ -1,29 +1,12 @@
 import argparse
 import asyncio
-from dataclasses import dataclass
 
-from github_service.service import Service
+from github_service.service import GithubServiceConfig, Service
 from test_runner.__main__ import TestRunnerArguments
 
 
-@dataclass
-class GithubServiceArguments:
-    github_pat: str
-    test_runner_args: TestRunnerArguments
-    single_run_commit: str | None = None
-    vrt_api_url: str | None = None
-    vrt_api_key: str | None = None
-    vrt_frontend_url: str | None = None
-
-
-async def main(args: GithubServiceArguments):
-    service = Service(
-        args.github_pat,
-        args.test_runner_args,
-        args.vrt_api_url,
-        args.vrt_api_key,
-        args.vrt_frontend_url,
-    )
+async def main(args: GithubServiceConfig):
+    service = Service(config=args)
     if args.single_run_commit:
         await service.process_commit(args.single_run_commit)
     else:
@@ -71,7 +54,7 @@ if __name__ == "__main__":
         username=args.username,
         password=args.password,
     )
-    github_service_args = GithubServiceArguments(
+    github_service_args = GithubServiceConfig(
         github_pat=args.github_pat,
         test_runner_args=test_runner_args,
         single_run_commit=args.single_run_commit,

@@ -1,6 +1,6 @@
 import asyncio
 
-from github_service.__main__ import GithubServiceArguments
+from github_service.__main__ import GithubServiceConfig
 from github_service.__main__ import main as github_service_main
 from test_runner.__main__ import TestRunnerArguments
 from test_runner.__main__ import main as test_runner_main
@@ -28,7 +28,7 @@ async def main():
         password=env["PASSWORD"],
         binary_path=env.get("BINARY_PATH"),
     )
-    github_service_args = GithubServiceArguments(
+    github_service_args = GithubServiceConfig(
         github_pat=env["GITHUB_PAT"],
         test_runner_args=test_runner_args,
         single_run_commit=env.get("SINGLE_RUN_COMMIT"),

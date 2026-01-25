@@ -2,6 +2,7 @@ import asyncio
 import base64
 import sys
 import zipfile
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -19,6 +20,16 @@ from test_runner.__main__ import TestRunnerArguments, main
 from test_runner.config import get_screenshot_dir
 
 
+@dataclass
+class GithubServiceConfig:
+    github_pat: str
+    test_runner_args: TestRunnerArguments
+    single_run_commit: str | None = None
+    vrt_api_url: str | None = None
+    vrt_api_key: str | None = None
+    vrt_frontend_url: str | None = None
+
+
 class TestResult:
     def __init__(self, passed: bool, details: str, target_url: str | None = None):
         self.passed = passed
@@ -29,20 +40,12 @@ class TestResult:
 class Service:
     def __init__(
         self,
-        github_token: str,
-        test_runner_args: TestRunnerArguments,
-        vrt_api_url: str | None = None,
-        vrt_api_key: str | None = None,
-        vrt_frontend_url: str | None = None,
+        config: GithubServiceConfig,
     ):
-        self.github_token = github_token
-        self.test_runner_args = test_runner_args
-        self.repo = github.Github(login_or_token=self.github_token).get_repo(
+        self.config = config
+        self.repo = github.Github(login_or_token=config.github_pat).get_repo(
             "Cynteract/cynteract-app"
         )
-        self.vrt_api_url = vrt_api_url
-        self.vrt_api_key = vrt_api_key
-        self.vrt_frontend_url = vrt_frontend_url
 
     async def execute_command(self, *args: str, **kwargs) -> str:
         print(f"Executing command: {' '.join(args)}")
@@ -65,7 +68,7 @@ class Service:
         if not app_dir.exists():
             # clone the repo with PAT
             clone_url = self.repo.clone_url.replace(
-                "https://", f"https://{self.github_token}@"
+                "https://", f"https://{self.config.github_pat}@"
             )
             await self.execute_command("git", "clone", clone_url, app_dir.as_posix())
         else:
@@ -79,18 +82,16 @@ class Service:
     async def upload_screenshots(self, file_name_base: str) -> tuple[bool, str | None]:
         auto_pass = True
         build_url = None
-        if self.vrt_api_url and self.vrt_api_key:
+        if self.config.vrt_api_url and self.config.vrt_api_key:
             config = Config(
-                apiUrl=self.vrt_api_url,
-                apiKey=self.vrt_api_key,
+                apiUrl=self.config.vrt_api_url,
+                apiKey=self.config.vrt_api_key,
                 branchName="development",
                 project="Cynteract app",
                 ciBuildId=file_name_base,
             )
             with VisualRegressionTracker(config) as vrt:
-                build_url = (
-                    f"{self.vrt_frontend_url}/{vrt.projectId}?buildId={vrt.buildId}"
-                )
+                build_url = f"{self.config.vrt_frontend_url}/{vrt.projectId}?buildId={vrt.buildId}"
                 screenshot_dir = get_screenshot_dir(file_name_base)
                 for image_path in screenshot_dir.glob("*.png"):
                     try:
@@ -133,9 +134,9 @@ class Service:
         try:
             # run test-runner
             app_folder = await self.get_app_folder(file_name_base)
-            self.test_runner_args.binary_path = str(app_folder / "Cynteract.exe")
-            self.test_runner_args.test_id = file_name_base
-            await main(self.test_runner_args)
+            self.config.test_runner_args.binary_path = str(app_folder / "Cynteract.exe")
+            self.config.test_runner_args.test_id = file_name_base
+            await main(self.config.test_runner_args)
 
             # upload screenshots
             passed, build_url = await self.upload_screenshots(file_name_base)
