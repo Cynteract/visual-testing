@@ -76,6 +76,7 @@ class App:
         Sets the size of the app window.
         """
         assert self.window, "App window is not available. Call open() first."
+        self.requested_size = (width, height)
         self.window.resizeTo(width, height)
 
     def close(self):
@@ -128,7 +129,8 @@ class App:
         Takes a screenshot of the app window and saves it to the given path.
         """
         assert self.window, "App window is not available. Call open() first."
-        with PIL.ImageGrab.grab() as img:
+        bbox = self._get_bounding_box()
+        with PIL.ImageGrab.grab(bbox=bbox) as img:
             img.save(save_path)
 
     def _get_bounding_box(self) -> tuple[int, int, int, int]:

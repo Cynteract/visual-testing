@@ -5,6 +5,7 @@ from pathlib import Path
 import pynput
 
 from test_runner.app import App
+from test_runner.config import get_screenshot_dir
 
 REGION = (0, 0, 800, 600)
 
@@ -66,9 +67,9 @@ class LoginTest:
             await asyncio.sleep(0.5)
 
     async def screenshot(self, name: str, test_id: str):
-        base_dir = Path.home() / "Documents" / "visual_testing" / "screenshots"
-        image_path = base_dir / test_id / (name + ".png")
-        image_path.parent.mkdir(parents=True, exist_ok=True)
+        screenshot_dir = get_screenshot_dir(test_id)
+        image_path = screenshot_dir / (name + ".png")
+        screenshot_dir.mkdir(parents=True, exist_ok=True)
         self.app.screenshot(image_path)
 
     async def runTest(self, username: str, password: str, test_id: str):

@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import sys
 import zipfile
 from datetime import datetime, timedelta, timezone
@@ -6,23 +7,42 @@ from pathlib import Path
 
 import github
 import requests
+from github.Commit import Commit
+from visual_regression_tracker import (
+    Config,
+    TestRun,
+    TestRunError,
+    VisualRegressionTracker,
+)
 
 from test_runner.__main__ import TestRunnerArguments, main
+from test_runner.config import get_screenshot_dir
 
 
 class TestResult:
-    def __init__(self, passed: bool, details: str):
+    def __init__(self, passed: bool, details: str, target_url: str | None = None):
         self.passed = passed
         self.details = details
+        self.target_url = target_url
 
 
 class Service:
-    def __init__(self, github_token: str, test_runner_args: TestRunnerArguments):
+    def __init__(
+        self,
+        github_token: str,
+        test_runner_args: TestRunnerArguments,
+        vrt_api_url: str | None = None,
+        vrt_api_key: str | None = None,
+        vrt_frontend_url: str | None = None,
+    ):
         self.github_token = github_token
         self.test_runner_args = test_runner_args
         self.repo = github.Github(login_or_token=self.github_token).get_repo(
             "Cynteract/cynteract-app"
         )
+        self.vrt_api_url = vrt_api_url
+        self.vrt_api_key = vrt_api_key
+        self.vrt_frontend_url = vrt_frontend_url
 
     async def execute_command(self, *args: str, **kwargs) -> str:
         print(f"Executing command: {' '.join(args)}")
@@ -56,19 +76,81 @@ class Service:
         )
         return version_info
 
-    async def run_commit_test(self, commit_sha: str) -> TestResult:
-        try:
-            version_info = await self.get_version_info(
-                "--ci-development", "--commitish=" + commit_sha
+    async def upload_screenshots(self, file_name_base: str) -> tuple[bool, str | None]:
+        auto_pass = True
+        build_url = None
+        if self.vrt_api_url and self.vrt_api_key:
+            config = Config(
+                apiUrl=self.vrt_api_url,
+                apiKey=self.vrt_api_key,
+                branchName="development",
+                project="Cynteract app",
+                ciBuildId=file_name_base,
             )
-            _, file_name_base, _ = version_info.split(",")
+            with VisualRegressionTracker(config) as vrt:
+                build_url = (
+                    f"{self.vrt_frontend_url}/{vrt.projectId}?buildId={vrt.buildId}"
+                )
+                screenshot_dir = get_screenshot_dir(file_name_base)
+                for image_path in screenshot_dir.glob("*.png"):
+                    try:
+                        with image_path.open("rb") as f:
+                            image_data = f.read()
+                            vrt.track(
+                                TestRun(
+                                    name=image_path.stem,
+                                    imageBase64=base64.b64encode(image_data).decode(
+                                        "utf-8"
+                                    ),
+                                )
+                            )
+                    except TestRunError:
+                        auto_pass = False
+                        # continue with next image
+                        pass
+                    # yield
+                    await asyncio.sleep(0)
+        return auto_pass, build_url
+
+    async def get_file_name_base(self, commit: Commit) -> str:
+        if any(
+            branch.name == "development" for branch in commit.get_branches_where_head()
+        ):
+            version_info = await self.get_version_info(
+                "--ci-development", "--commitish=" + commit.sha
+            )
+        elif commit.get_pulls().totalCount > 0:
+            pr_number = commit.get_pulls().get_page(0)[0].number
+            version_info = await self.get_version_info(
+                f"--ci-pr={pr_number}", "--commitish=" + commit.sha
+            )
+        else:
+            raise RuntimeError(f"Neither development nor PR commit: {commit.sha}")
+        _, file_name_base, _ = version_info.split(",")
+        return file_name_base
+
+    async def run_commit_test(self, file_name_base: str) -> TestResult:
+        try:
+            # run test-runner
             app_folder = await self.get_app_folder(file_name_base)
             self.test_runner_args.binary_path = str(app_folder / "Cynteract.exe")
             self.test_runner_args.test_id = file_name_base
             await main(self.test_runner_args)
+
+            # upload screenshots
+            passed, build_url = await self.upload_screenshots(file_name_base)
+            if passed:
+                return TestResult(
+                    passed=True, details="All tests passed", target_url=build_url
+                )
+            else:
+                return TestResult(
+                    passed=False,
+                    details="Some visual tests failed",
+                    target_url=build_url,
+                )
         except Exception as e:
-            return TestResult(passed=False, details=str(e))
-        return TestResult(passed=True, details="All tests passed")
+            return TestResult(passed=False, details=str(e)[:140], target_url=None)
 
     async def get_app_folder(self, version: str) -> Path:
         app_folder = (
@@ -109,9 +191,10 @@ class Service:
                 state="pending",
                 context="visual regression test",
                 description="Robot tests are running...",
-                target_url="https://cynteract.com",
+                target_url="",
             )
-            test_result = await self.run_commit_test(commit.sha)
+            file_name_base = await self.get_file_name_base(commit)
+            test_result = await self.run_commit_test(file_name_base)
             print(
                 f"Test result for commit {commit.sha}: {'PASSED' if test_result.passed else 'FAILED'} - {test_result.details}"
             )
@@ -119,7 +202,7 @@ class Service:
                 state="success" if test_result.passed else "failure",
                 context="visual regression test",
                 description=test_result.details,
-                target_url="https://cynteract.com",
+                target_url=test_result.target_url if test_result.target_url else "",
             )
 
     async def run(self):
@@ -143,12 +226,17 @@ class Service:
             dev_build_runs = dev_build.get_runs(
                 status="success", created=f">{cutoff_date.strftime('%Y-%m-%d')}"
             )
-            # pr_build_runs = pr_build.get_runs(
-            #     status="success", created=f">{cutoff_date.strftime('%Y-%m-%d')}"
-            # )
+            pr_build_runs = pr_build.get_runs(
+                status="success", created=f">{cutoff_date.strftime('%Y-%m-%d')}"
+            )
 
             cutoff_date = datetime.now(timezone.utc) - timedelta(minutes=5)
 
             for run in dev_build_runs:
                 await self.process_commit(run.head_sha)
                 return
+            for run in pr_build_runs:
+                await self.process_commit(run.head_sha)
+
+            # wait 5 minutes before polling again
+            await asyncio.sleep(300)

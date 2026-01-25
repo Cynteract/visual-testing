@@ -11,11 +11,20 @@ class GithubServiceArguments:
     github_pat: str
     test_runner_args: TestRunnerArguments
     single_run_commit: str | None = None
+    vrt_api_url: str | None = None
+    vrt_api_key: str | None = None
+    vrt_frontend_url: str | None = None
 
 
 async def main(args: GithubServiceArguments):
-    service = Service(args.github_pat, args.test_runner_args)
-    if args.single_run_commit is not None:
+    service = Service(
+        args.github_pat,
+        args.test_runner_args,
+        args.vrt_api_url,
+        args.vrt_api_key,
+        args.vrt_frontend_url,
+    )
+    if args.single_run_commit:
         await service.process_commit(args.single_run_commit)
     else:
         await service.run()
@@ -38,6 +47,24 @@ if __name__ == "__main__":
         required=False,
         help="If provided, only process this single commit SHA.",
     )
+    parser.add_argument(
+        "--vrt-apiurl",
+        type=str,
+        required=False,
+        help="VRT API URL.",
+    )
+    parser.add_argument(
+        "--vrt-apikey",
+        type=str,
+        required=False,
+        help="VRT API Key.",
+    )
+    parser.add_argument(
+        "--vrt-frontendurl",
+        type=str,
+        required=False,
+        help="VRT Frontend URL.",
+    )
     args = parser.parse_args()
     test_runner_args = TestRunnerArguments(
         binary_path=None,
@@ -48,5 +75,8 @@ if __name__ == "__main__":
         github_pat=args.github_pat,
         test_runner_args=test_runner_args,
         single_run_commit=args.single_run_commit,
+        vrt_api_url=args.vrt_apiurl,
+        vrt_api_key=args.vrt_apikey,
+        vrt_frontend_url=args.vrt_frontendurl,
     )
     asyncio.run(main(github_service_args))
