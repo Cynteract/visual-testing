@@ -2,8 +2,8 @@ import asyncio
 
 from github_service.__main__ import GithubServiceConfig
 from github_service.__main__ import main as github_service_main
-from test_runner.__main__ import TestRunnerArguments
-from test_runner.__main__ import main as test_runner_main
+from robot.__main__ import RobotArguments
+from robot.__main__ import main as robot_main
 
 
 async def main():
@@ -23,14 +23,14 @@ async def main():
         env.get("VRT_FRONTENDURL") is not None
     ), "VRT_FRONTENDURL not found in environment"
 
-    test_runner_args = TestRunnerArguments(
+    robot_args = RobotArguments(
         username=env["USERNAME"],
         password=env["PASSWORD"],
         binary_path=env.get("BINARY_PATH"),
     )
     github_service_args = GithubServiceConfig(
         github_pat=env["GITHUB_PAT"],
-        test_runner_args=test_runner_args,
+        robot_args=robot_args,
         single_run_commit=env.get("SINGLE_RUN_COMMIT"),
         vrt_api_url=env.get("VRT_APIURL"),
         vrt_api_key=env.get("VRT_APIKEY"),
@@ -39,7 +39,7 @@ async def main():
     # to configure for debugging, change the number below
     match 1:
         case 0:
-            await test_runner_main(test_runner_args)
+            await robot_main(robot_args)
         case 1:
             await github_service_main(github_service_args)
 

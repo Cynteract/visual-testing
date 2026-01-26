@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import enum
 import sys
 import zipfile
 from dataclasses import dataclass
@@ -10,31 +11,52 @@ import github
 import requests
 from github.Commit import Commit
 from visual_regression_tracker import (
+    Client,
     Config,
     TestRun,
-    TestRunError,
     VisualRegressionTracker,
+    types,
 )
 
-from test_runner.__main__ import TestRunnerArguments, main
-from test_runner.config import get_screenshot_dir
+from robot.__main__ import RobotArguments, main
+from robot.config import get_screenshot_dir
 
 
 @dataclass
 class GithubServiceConfig:
     github_pat: str
-    test_runner_args: TestRunnerArguments
+    robot_args: RobotArguments
     single_run_commit: str | None = None
     vrt_api_url: str | None = None
     vrt_api_key: str | None = None
     vrt_frontend_url: str | None = None
 
 
+@dataclass
+class VRTTestResult:
+    ok_count: int
+    unresolved_count: int
+    new_count: int
+    build_url: str | None
+
+
 class TestResult:
-    def __init__(self, passed: bool, details: str, target_url: str | None = None):
-        self.passed = passed
+    def __init__(
+        self,
+        robot_passed: bool,
+        vrt_passed: bool,
+        details: str,
+        target_url: str | None = None,
+    ):
+        self.robot_passed = robot_passed
+        self.vrt_passed = vrt_passed
+        self.passed = robot_passed and vrt_passed
         self.details = details
         self.target_url = target_url
+
+
+class CommitState(str, enum.Enum):
+    NEW = "new"
 
 
 class Service:
@@ -46,6 +68,14 @@ class Service:
         self.repo = github.Github(login_or_token=config.github_pat).get_repo(
             "Cynteract/cynteract-app"
         )
+        if config.vrt_api_url and config.vrt_api_key:
+            self.vrt_client = Client(
+                Config(
+                    apiUrl=config.vrt_api_url,
+                    apiKey=config.vrt_api_key,
+                    project="Cynteract app",
+                )
+            )
 
     async def execute_command(self, *args: str, **kwargs) -> str:
         print(f"Executing command: {' '.join(args)}")
@@ -79,79 +109,91 @@ class Service:
         )
         return version_info
 
-    async def upload_screenshots(self, file_name_base: str) -> tuple[bool, str | None]:
-        auto_pass = True
-        build_url = None
+    async def upload_screenshots(self, version: str, branch: str) -> VRTTestResult:
+        build_result = VRTTestResult(0, 0, 0, None)
         if self.config.vrt_api_url and self.config.vrt_api_key:
             config = Config(
                 apiUrl=self.config.vrt_api_url,
                 apiKey=self.config.vrt_api_key,
-                branchName="development",
+                branchName=branch,
                 project="Cynteract app",
-                ciBuildId=file_name_base,
+                ciBuildId=version,
+                # don't raise exception on NEW or UNRESOLVED images
+                enableSoftAssert=True,
             )
             with VisualRegressionTracker(config) as vrt:
-                build_url = f"{self.config.vrt_frontend_url}/{vrt.projectId}?buildId={vrt.buildId}"
-                screenshot_dir = get_screenshot_dir(file_name_base)
+                build_result.build_url = f"{self.config.vrt_frontend_url}/{vrt.projectId}?buildId={vrt.buildId}"
+                screenshot_dir = get_screenshot_dir(version)
                 for image_path in screenshot_dir.glob("*.png"):
-                    try:
-                        with image_path.open("rb") as f:
-                            image_data = f.read()
-                            vrt.track(
-                                TestRun(
-                                    name=image_path.stem,
-                                    imageBase64=base64.b64encode(image_data).decode(
-                                        "utf-8"
-                                    ),
-                                )
-                            )
-                    except TestRunError:
-                        auto_pass = False
-                        # continue with next image
-                        pass
+                    with image_path.open("rb") as f:
+                        image_data = f.read()
+                        imagebase64 = base64.b64encode(image_data).decode("utf-8")
+                        result = vrt.track(
+                            TestRun(name=image_path.stem, imageBase64=imagebase64)
+                        )
+                        match result.testRunResponse.status:
+                            case types.TestRunStatus.OK:
+                                build_result.ok_count += 1
+                            case types.TestRunStatus.UNRESOLVED:
+                                build_result.unresolved_count += 1
+                            case types.TestRunStatus.NEW:
+                                build_result.new_count += 1
                     # yield
                     await asyncio.sleep(0)
-        return auto_pass, build_url
+        return build_result
 
-    async def get_file_name_base(self, commit: Commit) -> str:
+    async def get_version_and_branch(self, commit: Commit) -> tuple[str, str]:
+        branch = None
         if any(
             branch.name == "development" for branch in commit.get_branches_where_head()
         ):
             version_info = await self.get_version_info(
                 "--ci-development", "--commitish=" + commit.sha
             )
+            branch = "development"
         elif commit.get_pulls().totalCount > 0:
-            pr_number = commit.get_pulls().get_page(0)[0].number
+            pr = commit.get_pulls().get_page(0)[0]
             version_info = await self.get_version_info(
-                f"--ci-pr={pr_number}", "--commitish=" + commit.sha
+                f"--ci-pr={pr.number}", "--commitish=" + commit.sha
             )
+            branch = pr.head.ref
         else:
             raise RuntimeError(f"Neither development nor PR commit: {commit.sha}")
         _, file_name_base, _ = version_info.split(",")
-        return file_name_base
+        return file_name_base, branch
 
-    async def run_commit_test(self, file_name_base: str) -> TestResult:
+    async def run_commit_test(self, version: str, branch: str) -> TestResult:
         try:
-            # run test-runner
-            app_folder = await self.get_app_folder(file_name_base)
-            self.config.test_runner_args.binary_path = str(app_folder / "Cynteract.exe")
-            self.config.test_runner_args.test_id = file_name_base
-            await main(self.config.test_runner_args)
+            # run robot
+            if False:
+                app_folder = await self.get_app_folder(version)
+                self.config.robot_args.binary_path = str(app_folder / "Cynteract.exe")
+                self.config.robot_args.test_id = version
+                await main(self.config.robot_args)
 
             # upload screenshots
-            passed, build_url = await self.upload_screenshots(file_name_base)
-            if passed:
+            vrt_result = await self.upload_screenshots(version, branch)
+            if vrt_result.unresolved_count == 0 and vrt_result.new_count == 0:
                 return TestResult(
-                    passed=True, details="All tests passed", target_url=build_url
+                    robot_passed=True,
+                    vrt_passed=True,
+                    details="All tests passed",
+                    target_url=vrt_result.build_url,
                 )
             else:
                 return TestResult(
-                    passed=False,
-                    details="Some visual tests failed",
-                    target_url=build_url,
+                    robot_passed=True,
+                    vrt_passed=False,
+                    details=f"{vrt_result.unresolved_count} unresolved, {vrt_result.new_count} new images",
+                    target_url=vrt_result.build_url,
                 )
         except Exception as e:
-            return TestResult(passed=False, details=str(e)[:140], target_url=None)
+            return TestResult(
+                robot_passed=False,
+                vrt_passed=False,
+                details=str(e)[:140],
+                target_url=None,
+            )
 
     async def get_app_folder(self, version: str) -> Path:
         app_folder = (
@@ -180,22 +222,27 @@ class Service:
                 zip_ref.extractall(app_folder)
         return app_folder
 
-    async def process_commit(self, commit_sha: str):
+    async def process_commit(self, commit_sha: str) -> bool:
+        """
+        Check status of commit. Execute robot if not already done. Check for the result of the visual regression test.
+        Returns True if processing is complete, False otherwise.
+        """
         commit = self.repo.get_commit(commit_sha)
-        commit_status = None
+        is_complete = False
+        is_robot_complete = False
         for status in commit.get_statuses():
             if status.context == "visual regression test":
-                commit_status = status
+                is_robot_complete = True
                 break
-        if commit_status is None or True:
+        if not is_complete:
             commit_status = commit.create_status(
                 state="pending",
                 context="visual regression test",
                 description="Robot tests are running...",
                 target_url="",
             )
-            file_name_base = await self.get_file_name_base(commit)
-            test_result = await self.run_commit_test(file_name_base)
+            version, branch = await self.get_version_and_branch(commit)
+            test_result = await self.run_commit_test(version, branch)
             print(
                 f"Test result for commit {commit.sha}: {'PASSED' if test_result.passed else 'FAILED'} - {test_result.details}"
             )
@@ -205,6 +252,8 @@ class Service:
                 description=test_result.details,
                 target_url=test_result.target_url if test_result.target_url else "",
             )
+            is_complete = test_result.passed
+        return is_complete
 
     async def run(self):
         # poll action runs
@@ -231,13 +280,13 @@ class Service:
                 status="success", created=f">{cutoff_date.strftime('%Y-%m-%d')}"
             )
 
+            # don't consider older runs if their visual tests (robot + human) are complete
             cutoff_date = datetime.now(timezone.utc) - timedelta(minutes=5)
 
-            for run in dev_build_runs:
-                await self.process_commit(run.head_sha)
-                return
-            for run in pr_build_runs:
-                await self.process_commit(run.head_sha)
+            for run in list(dev_build_runs) + list(pr_build_runs):
+                is_complete = await self.process_commit(run.head_sha)
+                if not is_complete:
+                    cutoff_date = min(cutoff_date, run.created_at)
 
             # wait 5 minutes before polling again
             await asyncio.sleep(300)

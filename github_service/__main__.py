@@ -2,7 +2,7 @@ import argparse
 import asyncio
 
 from github_service.service import GithubServiceConfig, Service
-from test_runner.__main__ import TestRunnerArguments
+from robot.__main__ import RobotArguments
 
 
 async def main(args: GithubServiceConfig):
@@ -19,10 +19,10 @@ if __name__ == "__main__":
         "--github-pat", type=str, required=True, help="GitHub Personal Access Token."
     )
     parser.add_argument(
-        "--username", type=str, required=True, help="Username for test runner."
+        "--username", type=str, required=True, help="Username for robot."
     )
     parser.add_argument(
-        "--password", type=str, required=True, help="Password for test runner."
+        "--password", type=str, required=True, help="Password for robot."
     )
     parser.add_argument(
         "--single-run-commit",
@@ -49,14 +49,14 @@ if __name__ == "__main__":
         help="VRT Frontend URL.",
     )
     args = parser.parse_args()
-    test_runner_args = TestRunnerArguments(
+    robot_args = RobotArguments(
         binary_path=None,
         username=args.username,
         password=args.password,
     )
     github_service_args = GithubServiceConfig(
         github_pat=args.github_pat,
-        test_runner_args=test_runner_args,
+        robot_args=robot_args,
         single_run_commit=args.single_run_commit,
         vrt_api_url=args.vrt_apiurl,
         vrt_api_key=args.vrt_apikey,

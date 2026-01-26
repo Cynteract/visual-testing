@@ -3,19 +3,19 @@ import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 
-from test_runner.app import App
-from test_runner.tests.login import LoginTest
+from robot.app import App
+from robot.tests.login import LoginTest
 
 
 @dataclass
-class TestRunnerArguments:
+class RobotArguments:
     binary_path: str | None
     username: str
     password: str
     test_id: str = "default"
 
 
-async def main(args: TestRunnerArguments):
+async def main(args: RobotArguments):
     assert args.binary_path is not None, "Binary path must be provided"
     print(f"Starting tests with binary at {args.binary_path}")
     app_path = Path(args.binary_path)
@@ -56,7 +56,7 @@ if __name__ == "__main__":
         help="Test ID for screenshots.",
     )
     args = parser.parse_args()
-    arguments = TestRunnerArguments(
+    arguments = RobotArguments(
         binary_path=args.binary_path,
         username=args.username,
         password=args.password,

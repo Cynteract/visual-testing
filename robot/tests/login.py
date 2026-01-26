@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pynput
 
-from test_runner.app import App
-from test_runner.config import get_screenshot_dir
+from robot.app import App
+from robot.config import get_screenshot_dir
 
 REGION = (0, 0, 800, 600)
 
@@ -73,7 +73,7 @@ class LoginTest:
         self.app.screenshot(image_path)
 
     async def runTest(self, username: str, password: str, test_id: str):
-        IMGDIR = Path("test_runner/tests/images")
+        IMGDIR = Path("robot/tests/images")
 
         # Login
         await self.clickImage(IMGDIR / "LoginLink.png")

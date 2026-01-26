@@ -13,5 +13,7 @@
   "editor.codeActionsOnSave": {
     "source.organizeImports": "always",
     "source.unusedImports": "always"
-  }
+  },
+  "python.autoComplete.extraPaths": ["../sdk-python"],
+  "python.analysis.extraPaths": ["../sdk-python"]
 }
