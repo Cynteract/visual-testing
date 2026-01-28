@@ -40,23 +40,26 @@ class VRTTestResult:
     build_url: str | None
 
 
+class CommitTestStatus(str, enum.Enum):
+    ROBOT_PENDING = "robot_pending"
+    ROBOT_RUNNING = "robot_running"
+    ROBOT_FAILURE = "robot_failure"
+    VRT_PENDING = "vrt_pending"
+    VRT_FAILURE = "vrt_failure"
+    SUCCESS = "success"
+    ERROR = "error"
+
+
 class TestResult:
     def __init__(
         self,
-        robot_passed: bool,
-        vrt_passed: bool,
+        test_status: CommitTestStatus,
         details: str,
         target_url: str | None = None,
     ):
-        self.robot_passed = robot_passed
-        self.vrt_passed = vrt_passed
-        self.passed = robot_passed and vrt_passed
+        self.test_status = test_status
         self.details = details
         self.target_url = target_url
-
-
-class CommitState(str, enum.Enum):
-    NEW = "new"
 
 
 class Service:
@@ -175,22 +178,19 @@ class Service:
             vrt_result = await self.upload_screenshots(version, branch)
             if vrt_result.unresolved_count == 0 and vrt_result.new_count == 0:
                 return TestResult(
-                    robot_passed=True,
-                    vrt_passed=True,
+                    test_status=CommitTestStatus.SUCCESS,
                     details="All tests passed",
                     target_url=vrt_result.build_url,
                 )
             else:
                 return TestResult(
-                    robot_passed=True,
-                    vrt_passed=False,
+                    test_status=CommitTestStatus.VRT_PENDING,
                     details=f"{vrt_result.unresolved_count} unresolved, {vrt_result.new_count} new images",
                     target_url=vrt_result.build_url,
                 )
         except Exception as e:
             return TestResult(
-                robot_passed=False,
-                vrt_passed=False,
+                test_status=CommitTestStatus.ROBOT_FAILURE,
                 details=str(e)[:140],
                 target_url=None,
             )
@@ -222,38 +222,81 @@ class Service:
                 zip_ref.extractall(app_folder)
         return app_folder
 
-    async def process_commit(self, commit_sha: str) -> bool:
+    async def process_commit(self, commit_sha: str) -> CommitTestStatus:
         """
         Check status of commit. Execute robot if not already done. Check for the result of the visual regression test.
         Returns True if processing is complete, False otherwise.
         """
         commit = self.repo.get_commit(commit_sha)
-        is_complete = False
-        is_robot_complete = False
+        version, branch = await self.get_version_and_branch(commit)
+
+        # get commit status
+        commit_status = None
         for status in commit.get_statuses():
             if status.context == "visual regression test":
-                is_robot_complete = True
+                commit_status = status
                 break
-        if not is_complete:
+
+        if (
+            commit_status is None
+            or CommitTestStatus.ROBOT_PENDING.value in commit_status.description
+        ):
+            # start robot
             commit_status = commit.create_status(
                 state="pending",
                 context="visual regression test",
-                description="Robot tests are running...",
+                description=f"{CommitTestStatus.ROBOT_RUNNING.value} Robot tests are running...",
                 target_url="",
             )
-            version, branch = await self.get_version_and_branch(commit)
             test_result = await self.run_commit_test(version, branch)
             print(
-                f"Test result for commit {commit.sha}: {'PASSED' if test_result.passed else 'FAILED'} - {test_result.details}"
+                f"Test result for commit {commit.sha}: {test_result.test_status.value} - {test_result.details}"
             )
             commit_status = commit.create_status(
-                state="success" if test_result.passed else "failure",
+                state=(
+                    "success"
+                    if test_result.test_status == CommitTestStatus.SUCCESS
+                    else "failure"
+                ),
                 context="visual regression test",
-                description=test_result.details,
+                description=f"{test_result.test_status.value} {test_result.details}",
                 target_url=test_result.target_url if test_result.target_url else "",
             )
-            is_complete = test_result.passed
-        return is_complete
+            return test_result.test_status
+        elif CommitTestStatus.VRT_PENDING.value in commit_status.description:
+            # check if human review is done
+            build = self.vrt_client.get_build(ciBuildId=version)
+            if build.status == "passed":
+                # all done
+                commit_status = commit.create_status(
+                    state="success",
+                    context="visual regression test",
+                    description=f"{CommitTestStatus.SUCCESS.value} All tests passed",
+                    target_url=commit_status.target_url,
+                )
+                return CommitTestStatus.SUCCESS
+            elif build.status == "unresolved" or build.status == "new":
+                # still pending
+                return CommitTestStatus.VRT_PENDING
+            elif build.status == "failed":
+                # failed
+                commit_status = commit.create_status(
+                    state="failure",
+                    context="visual regression test",
+                    description=f"{CommitTestStatus.VRT_FAILURE.value} Visual regression tests failed",
+                    target_url=commit_status.target_url,
+                )
+                return CommitTestStatus.VRT_FAILURE
+            else:
+                print(
+                    f"Unknown VRT build status '{build.status}' for commit {commit.sha}"
+                )
+                return CommitTestStatus.ERROR
+        else:
+            print(
+                f'No action defined for commit {commit.sha} with status "{commit_status.description}"'
+            )
+            return CommitTestStatus.ERROR
 
     async def run(self):
         # poll action runs
@@ -284,8 +327,9 @@ class Service:
             cutoff_date = datetime.now(timezone.utc) - timedelta(minutes=5)
 
             for run in list(dev_build_runs) + list(pr_build_runs):
-                is_complete = await self.process_commit(run.head_sha)
-                if not is_complete:
+                test_status = await self.process_commit(run.head_sha)
+                # keep polling if human visual tests are still pending
+                if test_status != CommitTestStatus.VRT_PENDING:
                     cutoff_date = min(cutoff_date, run.created_at)
 
             # wait 5 minutes before polling again
