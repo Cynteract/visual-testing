@@ -12,6 +12,7 @@ import requests
 from github.Commit import Commit
 from visual_regression_tracker import (
     Client,
+    ClientConfig,
     Config,
     TestRun,
     VisualRegressionTracker,
@@ -30,6 +31,8 @@ class GithubServiceConfig:
     vrt_api_url: str | None = None
     vrt_api_key: str | None = None
     vrt_frontend_url: str | None = None
+    vrt_email: str | None = None
+    vrt_password: str | None = None
 
 
 @dataclass
@@ -71,14 +74,28 @@ class Service:
         self.repo = github.Github(login_or_token=config.github_pat).get_repo(
             "Cynteract/cynteract-app"
         )
-        if config.vrt_api_url and config.vrt_api_key:
+        if (
+            config.vrt_api_url
+            and config.vrt_api_key
+            and config.vrt_email
+            and config.vrt_password
+        ):
             self.vrt_client = Client(
-                Config(
+                ClientConfig(
                     apiUrl=config.vrt_api_url,
-                    apiKey=config.vrt_api_key,
                     project="Cynteract app",
+                    email=config.vrt_email,
+                    password=config.vrt_password,
                 )
             )
+
+    def format_commit_status_description(
+        self, status: CommitTestStatus, details: str
+    ) -> str:
+        message = f"[{status.value}] {details}"
+        if len(message) > 140:
+            message = message[:137] + "..."
+        return message
 
     async def execute_command(self, *args: str, **kwargs) -> str:
         print(f"Executing command: {' '.join(args)}")
@@ -168,11 +185,10 @@ class Service:
     async def run_commit_test(self, version: str, branch: str) -> TestResult:
         try:
             # run robot
-            if False:
-                app_folder = await self.get_app_folder(version)
-                self.config.robot_args.binary_path = str(app_folder / "Cynteract.exe")
-                self.config.robot_args.test_id = version
-                await main(self.config.robot_args)
+            app_folder = await self.get_app_folder(version)
+            self.config.robot_args.binary_path = str(app_folder / "Cynteract.exe")
+            self.config.robot_args.test_id = version
+            await main(self.config.robot_args)
 
             # upload screenshots
             vrt_result = await self.upload_screenshots(version, branch)
@@ -191,7 +207,7 @@ class Service:
         except Exception as e:
             return TestResult(
                 test_status=CommitTestStatus.ROBOT_FAILURE,
-                details=str(e)[:140],
+                details=str(e),
                 target_url=None,
             )
 
@@ -245,7 +261,9 @@ class Service:
             commit_status = commit.create_status(
                 state="pending",
                 context="visual regression test",
-                description=f"{CommitTestStatus.ROBOT_RUNNING.value} Robot tests are running...",
+                description=self.format_commit_status_description(
+                    CommitTestStatus.ROBOT_RUNNING, "Robot tests are running..."
+                ),
                 target_url="",
             )
             test_result = await self.run_commit_test(version, branch)
@@ -259,7 +277,9 @@ class Service:
                     else "failure"
                 ),
                 context="visual regression test",
-                description=f"{test_result.test_status.value} {test_result.details}",
+                description=self.format_commit_status_description(
+                    test_result.test_status, test_result.details
+                ),
                 target_url=test_result.target_url if test_result.target_url else "",
             )
             return test_result.test_status
@@ -271,7 +291,9 @@ class Service:
                 commit_status = commit.create_status(
                     state="success",
                     context="visual regression test",
-                    description=f"{CommitTestStatus.SUCCESS.value} All tests passed",
+                    description=self.format_commit_status_description(
+                        CommitTestStatus.SUCCESS, "All tests passed"
+                    ),
                     target_url=commit_status.target_url,
                 )
                 return CommitTestStatus.SUCCESS
@@ -283,7 +305,9 @@ class Service:
                 commit_status = commit.create_status(
                     state="failure",
                     context="visual regression test",
-                    description=f"{CommitTestStatus.VRT_FAILURE.value} Visual regression tests failed",
+                    description=self.format_commit_status_description(
+                        CommitTestStatus.VRT_FAILURE, "Visual regression tests failed"
+                    ),
                     target_url=commit_status.target_url,
                 )
                 return CommitTestStatus.VRT_FAILURE

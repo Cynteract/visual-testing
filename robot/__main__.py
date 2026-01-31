@@ -34,7 +34,6 @@ async def main(args: RobotArguments):
 
 
 if __name__ == "__main__":
-    # arguments --binary-path <path> and --username <username> and --password <password>
     parser = argparse.ArgumentParser(description="Run tests on Cynteract App.")
     parser.add_argument(
         "--binary-path",
