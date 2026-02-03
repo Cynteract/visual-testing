@@ -12,8 +12,9 @@ def load_env_file() -> dict[str, str]:
     env = {}
     with open(".env") as f:
         for line in f:
-            key, value = line.strip().split("=", 1)
-            env[key] = value
+            if line.strip() and not line.startswith("#"):
+                key, value = line.strip().split("=", 1)
+                env[key] = value
     return env
 
 
