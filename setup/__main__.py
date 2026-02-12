@@ -25,7 +25,7 @@ def load_env_file() -> dict[str, str]:
     return env
 
 
-def run_pyinfra(func, host, sudo_password: str | None, tags: list[str]):
+def run_pyinfra(func, host, sudo_password: str, **kwargs):
     hosts = [
         (
             host,
@@ -36,7 +36,7 @@ def run_pyinfra(func, host, sudo_password: str | None, tags: list[str]):
     config = Config(SUDO=True, SUDO_PASSWORD=sudo_password)
     state = State(inventory, config)
     connect_all(state)
-    add_op(state, func, tags=tags)
+    add_op(state, func, **kwargs)
     try:
         run_ops(state)
     except PyinfraError as e:
@@ -70,10 +70,14 @@ if __name__ == "__main__":
         assert (
             env.get("SUDO_PASSWORD") is not None
         ), "SUDO_PASSWORD not found in environment"
+        assert (
+            env.get("POSTGRES_PASSWORD") is not None
+        ), "POSTGRES_PASSWORD not found in environment"
         run_pyinfra(
             install_vrt,
             args.host,
-            sudo_password=env.get("SUDO_PASSWORD"),
+            sudo_password=env["SUDO_PASSWORD"],
+            postgres_password=env["POSTGRES_PASSWORD"],
             tags=args.tags,
         )
 

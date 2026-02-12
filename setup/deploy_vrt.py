@@ -12,7 +12,7 @@ class Tags(Enum):
 
 
 @deploy("Install Visual Regression Tracker")
-def install_vrt(tags: str | None = None):
+def install_vrt(postgres_password: str, tags: str | None = None):
     def base():
         pacman.packages(
             name="Install packages.",
@@ -72,6 +72,12 @@ def install_vrt(tags: str | None = None):
             user="vrt",
             group="vrt",
             mode="644",
+        )
+        files.replace(
+            name="Update POSTGRES_PASSWORD.",
+            path="/home/vrt/.env",
+            text="POSTGRES_PASSWORD=postgres",
+            replace=f"POSTGRES_PASSWORD={postgres_password}",
         )
         server.shell(
             name="Start vrt docker containers.",
