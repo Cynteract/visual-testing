@@ -59,7 +59,7 @@ if __name__ == "__main__":
         robot_args=robot_args,
         single_run_commit=args.single_run_commit,
         vrt_api_url=args.vrt_apiurl,
-        vrt_api_key=args.vrt_apikey,
+        vrt_api_key=args.vrt_api_key,
         vrt_frontend_url=args.vrt_frontendurl,
     )
     asyncio.run(main(github_service_args))

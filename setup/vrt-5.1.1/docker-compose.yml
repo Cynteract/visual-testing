@@ -56,9 +56,12 @@ services:
         condition: service_healthy
     restart: always
   migration:
-    image: visualregressiontracker/migration:${VRT_MIGRATION_VERSION}
+    build: https://github.com/adabru/backend.git#b4b036fd5f1255d875ea5a9b18efe1f3801e0418:prisma
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DEFAULT_USER_EMAIL: ${DEFAULT_USER_EMAIL}
+      DEFAULT_USER_PASSWORD: ${DEFAULT_USER_PASSWORD}
+      DEFAULT_USER_API_KEY: ${DEFAULT_USER_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy

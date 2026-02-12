@@ -23,13 +23,19 @@ async def main():
     assert env.get("GITHUB_PAT") is not None, "GITHUB_PAT not found in environment"
     assert env.get("USERNAME") is not None, "USERNAME not found in environment"
     assert env.get("PASSWORD") is not None, "PASSWORD not found in environment"
-    assert env.get("VRT_APIURL") is not None, "VRT_APIURL not found in environment"
-    assert env.get("VRT_APIKEY") is not None, "VRT_APIKEY not found in environment"
-    assert env.get("VRT_EMAIL") is not None, "VRT_EMAIL not found in environment"
-    assert env.get("VRT_PASSWORD") is not None, "VRT_PASSWORD not found in environment"
+    assert env.get("VRT_API_URL") is not None, "VRT_API_URL not found in environment"
     assert (
-        env.get("VRT_FRONTENDURL") is not None
-    ), "VRT_FRONTENDURL not found in environment"
+        env.get("VRT_ADMIN_API_KEY") is not None
+    ), "VRT_ADMIN_API_KEY not found in environment"
+    assert (
+        env.get("VRT_ADMIN_EMAIL") is not None
+    ), "VRT_ADMIN_EMAIL not found in environment"
+    assert (
+        env.get("VRT_ADMIN_PASSWORD") is not None
+    ), "VRT_ADMIN_PASSWORD not found in environment"
+    assert (
+        env.get("VRT_FRONTEND_URL") is not None
+    ), "VRT_FRONTEND_URL not found in environment"
 
     robot_args = RobotArguments(
         username=env["USERNAME"],
@@ -40,11 +46,11 @@ async def main():
         github_pat=env["GITHUB_PAT"],
         robot_args=robot_args,
         single_run_commit=env.get("SINGLE_RUN_COMMIT"),
-        vrt_api_url=env.get("VRT_APIURL"),
-        vrt_api_key=env.get("VRT_APIKEY"),
-        vrt_frontend_url=env.get("VRT_FRONTENDURL"),
-        vrt_email=env.get("VRT_EMAIL"),
-        vrt_password=env.get("VRT_PASSWORD"),
+        vrt_api_url=env.get("VRT_API_URL"),
+        vrt_api_key=env.get("VRT_ADMIN_API_KEY"),
+        vrt_frontend_url=env.get("VRT_FRONTEND_URL"),
+        vrt_email=env.get("VRT_ADMIN_EMAIL"),
+        vrt_password=env.get("VRT_ADMIN_PASSWORD"),
     )
     # to configure for debugging, change the number below
     match 1:

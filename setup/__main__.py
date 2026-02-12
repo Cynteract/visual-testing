@@ -9,7 +9,7 @@ from pyinfra.api.operation import add_op
 from pyinfra.api.operations import run_ops
 from pyinfra.api.state import State
 
-from setup.deploy_vrt import install_vrt
+from setup.deploy_vrt import VRTConfig, install_vrt
 
 logging.basicConfig(level=logging.INFO)
 
@@ -71,13 +71,27 @@ if __name__ == "__main__":
             env.get("SUDO_PASSWORD") is not None
         ), "SUDO_PASSWORD not found in environment"
         assert (
-            env.get("POSTGRES_PASSWORD") is not None
-        ), "POSTGRES_PASSWORD not found in environment"
+            env.get("VRT_POSTGRES_PASSWORD") is not None
+        ), "VRT_POSTGRES_PASSWORD not found in environment"
+        assert (
+            env.get("VRT_ADMIN_EMAIL") is not None
+        ), "VRT_ADMIN_EMAIL not found in environment"
+        assert (
+            env.get("VRT_ADMIN_PASSWORD") is not None
+        ), "VRT_ADMIN_PASSWORD not found in environment"
+        assert (
+            env.get("VRT_ADMIN_API_KEY") is not None
+        ), "VRT_ADMIN_API_KEY not found in environment"
         run_pyinfra(
             install_vrt,
             args.host,
             sudo_password=env["SUDO_PASSWORD"],
-            postgres_password=env["POSTGRES_PASSWORD"],
+            vrt_config=VRTConfig(
+                postgres_password=env["VRT_POSTGRES_PASSWORD"],
+                admin_email=env["VRT_ADMIN_EMAIL"],
+                admin_password=env["VRT_ADMIN_PASSWORD"],
+                admin_api_key=env["VRT_ADMIN_API_KEY"],
+            ),
             tags=args.tags,
         )
 

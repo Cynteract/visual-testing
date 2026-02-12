@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from enum import Enum
 
 from pyinfra.api.deploy import deploy
@@ -11,8 +12,16 @@ class Tags(Enum):
     VRT = "vrt"
 
 
+@dataclass
+class VRTConfig:
+    postgres_password: str
+    admin_email: str
+    admin_password: str
+    admin_api_key: str
+
+
 @deploy("Install Visual Regression Tracker")
-def install_vrt(postgres_password: str, tags: str | None = None):
+def install_vrt(vrt_config: VRTConfig, tags: str | None = None):
     def base():
         pacman.packages(
             name="Install packages.",
@@ -65,19 +74,28 @@ def install_vrt(postgres_password: str, tags: str | None = None):
             name="Add vrt user.",
             user="vrt",
         )
-        files.sync(
-            name="Copy folder for vrt.",
-            dest=f"/home/vrt",
-            src="setup/vrt-5.1.1",
+        files.put(
+            name="Update docker-compose.yml.",
+            dest=f"/home/vrt/docker-compose.yml",
+            src="setup/vrt-5.1.1/docker-compose.yml",
             user="vrt",
             group="vrt",
             mode="644",
         )
-        files.replace(
-            name="Update POSTGRES_PASSWORD.",
+        files.template(
+            name="Update .env file.",
             path="/home/vrt/.env",
-            text="POSTGRES_PASSWORD=postgres",
-            replace=f"POSTGRES_PASSWORD={postgres_password}",
+            src="setup/vrt-5.1.1/.env.j2",
+            dest="/home/vrt/.env",
+            user="vrt",
+            group="vrt",
+            mode="644",
+            context={
+                "POSTGRES_PASSWORD": vrt_config.postgres_password,
+                "DEFAULT_USER_EMAIL": vrt_config.admin_email,
+                "DEFAULT_USER_PASSWORD": vrt_config.admin_password,
+                "DEFAULT_USER_API_KEY": vrt_config.admin_api_key,
+            },
         )
         server.shell(
             name="Start vrt docker containers.",
