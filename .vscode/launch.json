@@ -13,6 +13,14 @@
       "justMyCode": false
     },
     {
+      "name": "Deploy robot",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "setup",
+      "args": ["robot"],
+      "justMyCode": false
+    },
+    {
       "name": "Python Debugger: Current File",
       "type": "debugpy",
       "request": "launch",

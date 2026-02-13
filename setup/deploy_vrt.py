@@ -20,8 +20,8 @@ class VRTConfig:
     admin_api_key: str
 
 
-@deploy("Install Visual Regression Tracker")
-def install_vrt(vrt_config: VRTConfig, tags: str | None = None):
+@deploy("Deploy Visual Regression Tracker")
+def deploy_vrt(vrt_config: VRTConfig, tags: str | None = None):
     def base():
         pacman.packages(
             name="Install packages.",

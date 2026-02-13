@@ -1,17 +1,7 @@
 import argparse
 import logging
 
-from pyinfra.api.config import Config
-from pyinfra.api.connect import connect_all
-from pyinfra.api.exceptions import PyinfraError
-from pyinfra.api.inventory import Inventory
-from pyinfra.api.operation import add_op
-from pyinfra.api.operations import run_ops
-from pyinfra.api.state import State
-
-from setup.deploy_vrt import VRTConfig, install_vrt
-
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(format="%(message)s", level=logging.INFO)
 
 
 def load_env_file() -> dict[str, str]:
@@ -65,25 +55,36 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    env = load_env_file()
+    assert (
+        env.get("SUDO_PASSWORD") is not None
+    ), "SUDO_PASSWORD not found in environment"
+    assert (
+        env.get("VRT_POSTGRES_PASSWORD") is not None
+    ), "VRT_POSTGRES_PASSWORD not found in environment"
+    assert (
+        env.get("VRT_ADMIN_EMAIL") is not None
+    ), "VRT_ADMIN_EMAIL not found in environment"
+    assert (
+        env.get("VRT_ADMIN_PASSWORD") is not None
+    ), "VRT_ADMIN_PASSWORD not found in environment"
+    assert (
+        env.get("VRT_ADMIN_API_KEY") is not None
+    ), "VRT_ADMIN_API_KEY not found in environment"
+
     if args.command == "vrt":
-        env = load_env_file()
-        assert (
-            env.get("SUDO_PASSWORD") is not None
-        ), "SUDO_PASSWORD not found in environment"
-        assert (
-            env.get("VRT_POSTGRES_PASSWORD") is not None
-        ), "VRT_POSTGRES_PASSWORD not found in environment"
-        assert (
-            env.get("VRT_ADMIN_EMAIL") is not None
-        ), "VRT_ADMIN_EMAIL not found in environment"
-        assert (
-            env.get("VRT_ADMIN_PASSWORD") is not None
-        ), "VRT_ADMIN_PASSWORD not found in environment"
-        assert (
-            env.get("VRT_ADMIN_API_KEY") is not None
-        ), "VRT_ADMIN_API_KEY not found in environment"
+        from pyinfra.api.config import Config
+        from pyinfra.api.connect import connect_all
+        from pyinfra.api.exceptions import PyinfraError
+        from pyinfra.api.inventory import Inventory
+        from pyinfra.api.operation import add_op
+        from pyinfra.api.operations import run_ops
+        from pyinfra.api.state import State
+
+        from setup.deploy_vrt import VRTConfig, deploy_vrt
+
         run_pyinfra(
-            install_vrt,
+            deploy_vrt,
             args.host,
             sudo_password=env["SUDO_PASSWORD"],
             vrt_config=VRTConfig(
@@ -96,4 +97,12 @@ if __name__ == "__main__":
         )
 
     elif args.command == "robot":
-        print("Robot deployment is not implemented yet.")
+        from setup.deploy_robot import RobotConfig, deploy_robot
+
+        deploy_robot(
+            robot_config=RobotConfig(
+                vrt_email=env["VRT_ADMIN_EMAIL"],
+                vrt_password=env["VRT_ADMIN_PASSWORD"],
+                vrt_api_key=env["VRT_ADMIN_API_KEY"],
+            ),
+        )

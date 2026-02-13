@@ -1,0 +1,9 @@
+opencv-python
+psutil
+pygithub
+pytest
+pynput
+pywinctl
+pillow
+pyinfra
+visual_regression_tracker @ git+https://github.com/adabru/sdk-python.git@d9c84e6164fc52acd3b69f96e7373b5749062cf3
