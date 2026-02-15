@@ -1,10 +1,12 @@
 import argparse
 import asyncio
+import logging
 
 from github_service.__main__ import GithubServiceConfig
 from github_service.__main__ import main as github_service_main
 from robot.__main__ import RobotArguments
-from robot.__main__ import main as robot_main
+
+logging.basicConfig(level=logging.INFO)
 
 
 def load_env_file() -> dict[str, str]:
@@ -52,12 +54,7 @@ async def main():
         vrt_email=env.get("VRT_ADMIN_EMAIL"),
         vrt_password=env.get("VRT_ADMIN_PASSWORD"),
     )
-    # to configure for debugging, change the number below
-    match 1:
-        case 0:
-            await robot_main(robot_args)
-        case 1:
-            await github_service_main(github_service_args)
+    await github_service_main(github_service_args)
 
 
 # utility to reset commit status
@@ -68,6 +65,7 @@ def reset_commit():
     repo = github.Github(auth=github.Auth.Token(env["GITHUB_PAT"])).get_repo(
         "Cynteract/cynteract-app"
     )
+    logging.info(f"Reset commit status for {env['SINGLE_RUN_COMMIT']}.")
     commit = repo.get_commit(env["SINGLE_RUN_COMMIT"])
     commit.create_status(
         state="pending",

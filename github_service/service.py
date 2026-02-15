@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import enum
+import logging
 import sys
 import zipfile
 from dataclasses import dataclass
@@ -20,7 +21,7 @@ from visual_regression_tracker import (
 )
 
 from robot.__main__ import RobotArguments, main
-from robot.config import get_screenshot_dir
+from robot.config import get_builds_download_dir, get_screenshot_dir
 
 
 @dataclass
@@ -80,14 +81,21 @@ class Service:
             and config.vrt_email
             and config.vrt_password
         ):
+            logging.info("Initialize VRT client.")
             self.vrt_client = Client(
                 ClientConfig(
                     apiUrl=config.vrt_api_url,
-                    project="Cynteract app",
                     email=config.vrt_email,
                     password=config.vrt_password,
                 )
             )
+            project = self.vrt_client.get_projects()[0]
+            if project.name == "Default project":
+                logging.info("Configure VRT project.")
+                project.name = "Cynteract app"
+                project.mainBranchName = "development"
+                self.vrt_client.update_project(project)
+            self.vrt_client.set_project(project.id)
 
     def format_commit_status_description(
         self, status: CommitTestStatus, details: str
@@ -98,7 +106,7 @@ class Service:
         return message
 
     async def execute_command(self, *args: str, **kwargs) -> str:
-        print(f"Executing command: {' '.join(args)}")
+        logging.info(f"Execute command: {' '.join(args)}")
         subprocess_result = await asyncio.create_subprocess_exec(
             *args,
             stdout=asyncio.subprocess.PIPE,
@@ -212,28 +220,20 @@ class Service:
             )
 
     async def get_app_folder(self, version: str) -> Path:
-        app_folder = (
-            Path.home()
-            / "Documents"
-            / "visual_testing"
-            / "builds"
-            / f"Cynteract-{version}"
-        )
+        app_folder = get_builds_download_dir() / f"Cynteract-{version}"
         if not app_folder.exists():
             zip_path = app_folder.with_name(app_folder.name + ".zip")
             if not zip_path.exists():
-                # download the build zip from Google Cloud Storage
+                logging.info(f"Download build for version {version}.")
                 base_url = "https://storage.googleapis.com/cynteract-unity-auto-build"
                 download_url = f"{base_url}/windows/{zip_path.name}"
-                print(f"Downloading build from {download_url}...")
                 zip_path.parent.mkdir(parents=True, exist_ok=True)
                 response = requests.get(download_url, stream=True)
                 response.raise_for_status()
                 with open(zip_path, "wb") as f:
                     for chunk in response.iter_content(chunk_size=32768):
                         f.write(chunk)
-            # extract the zip
-            print(f"Extracting build to {app_folder}/...")
+            logging.info(f"Extract build to {app_folder}/ .")
             with zipfile.ZipFile(zip_path, "r") as zip_ref:
                 zip_ref.extractall(app_folder)
         return app_folder
@@ -243,6 +243,7 @@ class Service:
         Check status of commit. Execute robot if not already done. Check for the result of the visual regression test.
         Returns True if processing is complete, False otherwise.
         """
+        logging.info(f"Process commit {commit_sha}.")
         commit = self.repo.get_commit(commit_sha)
         version, branch = await self.get_version_and_branch(commit)
 
@@ -267,7 +268,7 @@ class Service:
                 target_url="",
             )
             test_result = await self.run_commit_test(version, branch)
-            print(
+            logging.info(
                 f"Test result for commit {commit.sha}: {test_result.test_status.value} - {test_result.details}"
             )
             commit_status = commit.create_status(
@@ -312,18 +313,19 @@ class Service:
                 )
                 return CommitTestStatus.VRT_FAILURE
             else:
-                print(
+                logging.error(
                     f"Unknown VRT build status '{build.status}' for commit {commit.sha}"
                 )
                 return CommitTestStatus.ERROR
         else:
-            print(
+            logging.error(
                 f'No action defined for commit {commit.sha} with status "{commit_status.description}"'
             )
             return CommitTestStatus.ERROR
 
     async def run(self):
         # poll action runs
+        logging.info("Fetch GitHub workflows.")
         actions = self.repo.get_workflows()
         dev_build = None
         pr_build = None
@@ -340,6 +342,7 @@ class Service:
 
         while True:
             # API docs: https://docs.github.com/en/rest/actions/workflow-runs?apiVersion=2022-11-28#list-workflow-runs-for-a-repository
+            logging.info("Retrieve recent workflow runs.")
             dev_build_runs = dev_build.get_runs(
                 status="success", created=f">{cutoff_date.strftime('%Y-%m-%d')}"
             )

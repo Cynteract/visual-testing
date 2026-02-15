@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
 
+from robot.config import get_builds_download_dir
+
 
 @dataclass
 class RobotConfig:
@@ -34,12 +36,12 @@ def deploy_robot(robot_config: RobotConfig):
     # Create virtual environment in repository root if it doesn't exist
     venv_python = project_root / ".venv" / "Scripts" / "python.exe"
     if not venv_python.exists():
-        logging.info(f"Creating virtual environment in {venv_python} ...")
+        logging.info(f"Create virtual environment in {venv_python} .")
         subprocess.run([sys.executable, "-m", "venv", str(project_root / ".venv")])
 
     # Activate virtual environment if not already activated
     if not Path(sys.executable).samefile(venv_python):
-        logging.info(f"Activating virtual environment {venv_python} ...")
+        logging.info(f"Activate virtual environment {venv_python} .")
         venv_process = subprocess.run([str(venv_python), __file__])
         sys.exit(venv_process.returncode)
     else:
@@ -84,3 +86,14 @@ def deploy_robot(robot_config: RobotConfig):
             bat_file.write(bat_content)
     else:
         logging.info(f"Startup script OK")
+
+    # Add Windows Defender security exception
+    logging.info(f"Add Windows Defender exclusion for builds download directory.")
+    exclusion_path = get_builds_download_dir()
+    subprocess.run(
+        [
+            "powershell",
+            "-Command",
+            f"Start-Process powershell -ArgumentList \"Add-MpPreference -ExclusionPath '{exclusion_path}'\" -Verb RunAs",
+        ]
+    )

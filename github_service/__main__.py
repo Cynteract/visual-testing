@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import logging
 
 from github_service.service import GithubServiceConfig, Service
 from robot.__main__ import RobotArguments
@@ -10,6 +11,7 @@ async def main(args: GithubServiceConfig):
     if args.single_run_commit:
         await service.process_commit(args.single_run_commit)
     else:
+        logging.info(f"Start processing commits.")
         await service.run()
 
 

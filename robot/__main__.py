@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,7 +18,7 @@ class RobotArguments:
 
 async def main(args: RobotArguments):
     assert args.binary_path is not None, "Binary path must be provided"
-    print(f"Starting tests with binary at {args.binary_path}")
+    logging.info(f"Start robot with binary {args.binary_path} .")
     app_path = Path(args.binary_path)
     app = App(app_path)
     state = await app.open()
