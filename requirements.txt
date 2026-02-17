@@ -7,3 +7,4 @@ pywinctl
 pillow
 pyinfra
 visual_regression_tracker @ git+https://github.com/adabru/sdk-python.git@44877795ff4b4d0d5e3f84427fd1af5f0ef8b707
+plyvel-ci

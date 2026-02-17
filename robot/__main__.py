@@ -16,8 +16,13 @@ class RobotArguments:
     test_id: str = "default"
 
 
+from .reset import reset_app
+
+
 async def main(args: RobotArguments):
     assert args.binary_path is not None, "Binary path must be provided"
+    logging.info("Reset app state before starting tests.")
+    reset_app()
     logging.info(f"Start robot with binary {args.binary_path} .")
     app_path = Path(args.binary_path)
     app = App(app_path)
