@@ -48,10 +48,18 @@ class CommitTestStatus(str, enum.Enum):
     ROBOT_PENDING = "robot_pending"
     ROBOT_RUNNING = "robot_running"
     ROBOT_FAILURE = "robot_failure"
+    ROBOT_SKIPPED = "robot_skipped"
     VRT_PENDING = "vrt_pending"
     VRT_FAILURE = "vrt_failure"
     SUCCESS = "success"
     ERROR = "error"
+
+
+def format_commit_status_description(status: CommitTestStatus, details: str) -> str:
+    message = f"[{status.value}] {details}"
+    if len(message) > 140:
+        message = message[:137] + "..."
+    return message
 
 
 class TestResult:
@@ -96,14 +104,6 @@ class Service:
                 project.mainBranchName = "development"
                 self.vrt_client.update_project(project)
             self.vrt_client.set_project(project.id)
-
-    def format_commit_status_description(
-        self, status: CommitTestStatus, details: str
-    ) -> str:
-        message = f"[{status.value}] {details}"
-        if len(message) > 140:
-            message = message[:137] + "..."
-        return message
 
     async def execute_command(self, *args: str, **kwargs) -> str:
         logging.info(f"Execute command: {' '.join(args)}")
@@ -262,7 +262,7 @@ class Service:
             commit_status = commit.create_status(
                 state="pending",
                 context="visual regression test",
-                description=self.format_commit_status_description(
+                description=format_commit_status_description(
                     CommitTestStatus.ROBOT_RUNNING, "Robot tests are running..."
                 ),
                 target_url="",
@@ -278,7 +278,7 @@ class Service:
                     else "failure"
                 ),
                 context="visual regression test",
-                description=self.format_commit_status_description(
+                description=format_commit_status_description(
                     test_result.test_status, test_result.details
                 ),
                 target_url=test_result.target_url if test_result.target_url else "",
@@ -292,7 +292,7 @@ class Service:
                 commit_status = commit.create_status(
                     state="success",
                     context="visual regression test",
-                    description=self.format_commit_status_description(
+                    description=format_commit_status_description(
                         CommitTestStatus.SUCCESS, "All tests passed"
                     ),
                     target_url=commit_status.target_url,
@@ -306,7 +306,7 @@ class Service:
                 commit_status = commit.create_status(
                     state="failure",
                     context="visual regression test",
-                    description=self.format_commit_status_description(
+                    description=format_commit_status_description(
                         CommitTestStatus.VRT_FAILURE, "Visual regression tests failed"
                     ),
                     target_url=commit_status.target_url,

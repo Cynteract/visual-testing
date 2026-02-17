@@ -4,6 +4,7 @@ import logging
 
 from github_service.__main__ import GithubServiceConfig
 from github_service.__main__ import main as github_service_main
+from github_service.service import CommitTestStatus, format_commit_status_description
 from robot.__main__ import RobotArguments
 
 logging.basicConfig(level=logging.INFO)
@@ -70,7 +71,29 @@ def reset_commit():
     commit.create_status(
         state="pending",
         context="visual regression test",
-        description=f"[robot_pending] Manual reset",
+        # description=f"[robot_pending] Manual reset",
+        description=format_commit_status_description(
+            CommitTestStatus.ROBOT_PENDING, "Manual reset"
+        ),
+    )
+
+
+# utility to skip robot test for a commit
+def skip_commit():
+    import github
+
+    env = load_env_file()
+    repo = github.Github(auth=github.Auth.Token(env["GITHUB_PAT"])).get_repo(
+        "Cynteract/cynteract-app"
+    )
+    logging.info(f"Skip robot test for commit {env['SINGLE_RUN_COMMIT']}.")
+    commit = repo.get_commit(env["SINGLE_RUN_COMMIT"])
+    commit.create_status(
+        state="success",
+        context="visual regression test",
+        description=format_commit_status_description(
+            CommitTestStatus.ROBOT_SKIPPED, "Manual skip"
+        ),
     )
 
 
@@ -78,8 +101,11 @@ if __name__ == "__main__":
     # arguments --reset-commit
     argparser = argparse.ArgumentParser()
     argparser.add_argument("--reset-commit", action="store_true")
+    argparser.add_argument("--skip-commit", action="store_true")
     args = argparser.parse_args()
     if args.reset_commit:
         reset_commit()
+    elif args.skip_commit:
+        skip_commit()
     else:
         asyncio.run(main())
