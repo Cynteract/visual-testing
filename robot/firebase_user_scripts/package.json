@@ -1,0 +1,26 @@
+{
+  "name": "firebase_user_scripts",
+  "version": "1.0.0",
+  "description": "Modify the test user's data for testing.",
+  "main": "index.ts",
+  "type": "module",
+  "scripts": {
+    "resetPlayerData": "ts-node index.ts --database=production --resetPlayerData",
+    "resetPlayerData:test": "ts-node index.ts --database=testing --resetPlayerData",
+    "printPlayerData": "ts-node index.ts --database=production",
+    "printPlayerData:test": "ts-node index.ts --database=testing",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Cynteract/visual-testing.git"
+  },
+  "dependencies": {
+    "firebase": "^12.9.0"
+  },
+  "devDependencies": {
+    "@types/firebase": "^2.4.32",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}

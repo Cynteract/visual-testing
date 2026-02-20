@@ -47,7 +47,7 @@ def deploy_robot(robot_config: RobotConfig):
     else:
         logging.info(f"Virtual environment OK")
 
-    # Install requirements if not already installed
+    # Install pip requirements if not already installed
     requirements_path = project_root / "requirements.txt"
     with open(requirements_path) as f:
         required_packages = [
@@ -69,6 +69,19 @@ def deploy_robot(robot_config: RobotConfig):
         )
     else:
         logging.info(f"Pip requirements OK")
+
+    # Install node and dependencies for firebase user scripts if not already installed
+    firebase_scripts_dir = project_root / "robot" / "firebase_user_scripts"
+    if not (firebase_scripts_dir / "node_modules").exists():
+        logging.info(f"Install node dependencies for firebase user scripts.")
+        subprocess.run(["fnm", "install"], cwd=firebase_scripts_dir, check=True)
+        subprocess.run(
+            ["fnm", "exec", "npm.cmd", "install"],
+            cwd=firebase_scripts_dir,
+            check=True,
+        )
+    else:
+        logging.info(f"Node dependencies for firebase user scripts OK")
 
     # Create script in autostart folder
     startup_bat = (
