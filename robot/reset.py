@@ -3,11 +3,12 @@ import os
 import shutil
 import subprocess
 import winreg
+from pathlib import Path
 
 import plyvel
 
 
-def reset_app():
+def reset_app_state():
     try:
         logging.info(
             "Remove registry key HKEY_CURRENT_USER\\Software\\Cynteract\\Cynteract."
@@ -71,5 +72,24 @@ def reset_app():
         logging.error(f"Error deleting local storage: {e}")
 
 
+def reset_player_data(username: str, password: str):
+    logging.info("Reset player data for user %s.", username)
+    subprocess.run(
+        [
+            "fnm",
+            "exec",
+            "npm.cmd",
+            "--",
+            "run",
+            "resetPlayerData",
+            "--",
+            f"--username={username}",
+            f"--password={password}",
+        ],
+        cwd=Path(__file__).parent / "firebase_user_scripts",
+        check=True,
+    )
+
+
 if __name__ == "__main__":
-    reset_app()
+    reset_app_state()

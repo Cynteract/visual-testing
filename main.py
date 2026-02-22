@@ -6,19 +6,9 @@ from github_service.__main__ import GithubServiceConfig
 from github_service.__main__ import main as github_service_main
 from github_service.service import CommitTestStatus, format_commit_status_description
 from robot.__main__ import RobotArguments
+from shared.utils import load_env_file
 
 logging.basicConfig(level=logging.INFO)
-
-
-def load_env_file() -> dict[str, str]:
-    # Load .env file
-    env = {}
-    with open(".env") as f:
-        for line in f:
-            if line.strip() and not line.startswith("#"):
-                key, value = line.strip().split("=", 1)
-                env[key] = value
-    return env
 
 
 async def main():

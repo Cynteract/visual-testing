@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import subprocess
 import time
 from enum import Enum
@@ -20,6 +21,7 @@ class App:
     window: pywinctl.Window | None = None
     enforce_size_task: asyncio.Task | None = None
     requested_size: tuple[int, int] | None = None
+    file_path: Path
 
     class State(Enum):
         Launching = "Launching"
@@ -42,6 +44,7 @@ class App:
                 break
         if app_pid is None:
             # start the app
+            logging.info(f"Start app {self.file_path} .")
             process = subprocess.Popen([str(self.file_path)])
             self.pid = process.pid
             app_state = self.State.Launching

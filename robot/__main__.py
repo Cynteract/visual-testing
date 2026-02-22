@@ -6,6 +6,7 @@ from pathlib import Path
 
 from robot.app import App
 from robot.tests.login import LoginTest
+from shared.utils import load_env_file
 
 
 @dataclass
@@ -16,13 +17,14 @@ class RobotArguments:
     test_id: str = "default"
 
 
-from .reset import reset_app
+from .reset import reset_app_state, reset_player_data
 
 
 async def main(args: RobotArguments):
     assert args.binary_path is not None, "Binary path must be provided"
     logging.info("Reset app state before starting tests.")
-    reset_app()
+    reset_app_state()
+    reset_player_data(args.username, args.password)
     logging.info(f"Start robot with binary {args.binary_path} .")
     app_path = Path(args.binary_path)
     app = App(app_path)
@@ -40,18 +42,29 @@ async def main(args: RobotArguments):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    env = load_env_file()
     parser = argparse.ArgumentParser(description="Run tests on Cynteract App.")
     parser.add_argument(
         "--binary-path",
         type=str,
-        required=True,
+        required=env.get("BINARY_PATH") is None,
+        default=env.get("BINARY_PATH"),
         help="Path to the Cynteract App binary.",
     )
     parser.add_argument(
-        "--username", type=str, required=True, help="Username for login."
+        "--username",
+        type=str,
+        required=env.get("USERNAME") is None,
+        default=env.get("USERNAME"),
+        help="Username for login.",
     )
     parser.add_argument(
-        "--password", type=str, required=True, help="Password for login."
+        "--password",
+        type=str,
+        required=env.get("PASSWORD") is None,
+        default=env.get("PASSWORD"),
+        help="Password for login.",
     )
     parser.add_argument(
         "--test-id",
