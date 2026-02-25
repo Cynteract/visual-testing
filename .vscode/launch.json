@@ -27,6 +27,13 @@
       "program": "${workspaceFolder}/main.py",
       "console": "integratedTerminal",
       "justMyCode": false
+    },
+    {
+      "name": "robot",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "robot",
+      "justMyCode": false
     }
   ]
 }

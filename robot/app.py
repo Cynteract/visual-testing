@@ -2,6 +2,7 @@ import asyncio
 import logging
 import subprocess
 import time
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
@@ -10,69 +11,126 @@ import numpy
 import PIL.ImageGrab
 import psutil
 import pywinctl
+import win32gui
 
 
 class MultipleMatchesFoundException(Exception):
     pass
 
 
+@dataclass
+class WindowMatcher:
+    pid: int | None = None
+    title: str | None = None
+    class_name: str | None = None
+
+
 class App:
-    pid: int
+    pid: int | None = None
+    window_matcher: WindowMatcher | None = None
     window: pywinctl.Window | None = None
     enforce_size_task: asyncio.Task | None = None
     requested_size: tuple[int, int] | None = None
-    file_path: Path
+    file_path: Path | None = None
 
     class State(Enum):
         Launching = "Launching"
         Running = "Running"
 
-    def __init__(self, file_path: Path):
-        self.file_path = file_path
+    class _Timeout:
+        def __init__(self, timeout: float, error_message: str):
+            self.timeout = timeout
+            self.error_message = error_message
+            self.start_time = time.time()
 
-    async def open(self) -> State:
+        def check(self):
+            if time.time() - self.start_time > self.timeout:
+                raise TimeoutError(self.error_message)
+
+    async def find_by_window(self, window_matcher: WindowMatcher, timeout: float = 5):
         """
-        Tries to open an app using the given file path and waits 1 second for it to be ready.
+        Finds a running app window by matching the window title with the given string. Sets self.pid and self.window when found.
+        """
+        self.window_matcher = window_matcher
+        await self._find_window(timeout=timeout)
+        assert self.window
+        self.window.activate()
+
+    async def find_or_start_by_path(self, path: Path) -> State:
+        """
+        Tries to open an app using the given file path and waits 5 seconds for it to be ready.
         If the app is already open, it is brought to the foreground.
         """
+        self.file_path = path
+
         # check if app is already running
-        app_pid = None
-        app_state = None
-        for proc in psutil.process_iter(["pid", "exe"]):
-            if proc.info["exe"] and Path(proc.info["exe"]) == self.file_path:
-                app_pid = proc.info["pid"]
-                break
-        if app_pid is None:
+        try:
+            await self._find_process(timeout=0)
+        except TimeoutError:
+            pass
+
+        if self.pid is None:
             # start the app
             logging.info(f"Start app {self.file_path} .")
             process = subprocess.Popen([str(self.file_path)])
             self.pid = process.pid
             app_state = self.State.Launching
         else:
-            self.pid = app_pid
             app_state = self.State.Running
-        self.window = await self.find_window()
+
+        self.window_matcher = WindowMatcher(pid=self.pid)
+        await self._find_window()
+        assert self.window
         self.window.activate()
         return app_state
 
-    async def find_window(self, timeout: float = 5) -> pywinctl.Window:
+    async def _find_process(self, timeout: float = 5):
         """
-        Waits for the app window to appear within the given number of seconds. Returns the window box when found.
+        Waits for a running process with the app file path to appear within the given number of seconds. Sets self.pid when found.
         """
-        if self.window:
-            return self.window
+        timer = self._Timeout(
+            timeout,
+            f"No running process found for app {self.file_path} within {timeout} seconds",
+        )
+        while self.pid is None:
+            for proc in psutil.process_iter(["pid", "exe"]):
+                if proc.info["exe"] and Path(proc.info["exe"]) == self.file_path:
+                    self.pid = proc.info["pid"]
+            if self.pid is None:
+                timer.check()
+                await asyncio.sleep(0.5)
 
-        start_time = time.time()
-        while True:
+    async def _find_window(self, timeout: float = 5):
+        """
+        Waits for the app window to appear within the given number of seconds. Sets self.window when found.
+        """
+        assert (
+            self.window_matcher is not None
+        ), "Either pid or window_matcher must be set to find the app window"
+        timer = self._Timeout(
+            timeout,
+            f"No app window found for {self.file_path} within {timeout} seconds",
+        )
+        while self.window is None:
             for window in pywinctl.getAllWindows():
-                if window.getPID() == self.pid:
+                is_ok = True
+                _pid = self.window_matcher.pid
+                _title = self.window_matcher.title
+                _class_name = self.window_matcher.class_name
+                if _pid is not None and window.getPID() != _pid:
+                    is_ok = False
+                elif _title is not None and _title != window.title:
+                    is_ok = False
+                elif _class_name is not None:
+                    hwnd = window.getHandle()
+                    class_name = win32gui.GetClassName(hwnd)
+                    if class_name != _class_name:
+                        is_ok = False
+                if is_ok:
                     self.window = window
-                    return window
-            if time.time() - start_time > timeout:
-                raise TimeoutError(
-                    f"App window for {self.file_path} did not appear within {timeout} seconds"
-                )
-            await asyncio.sleep(0.5)
+            if self.window is None:
+                timer.check()
+                await asyncio.sleep(0.5)
 
     def resize(self, width, height):
         """

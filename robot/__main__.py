@@ -27,8 +27,8 @@ async def main(args: RobotArguments):
     reset_player_data(args.username, args.password)
     logging.info(f"Start robot with binary {args.binary_path} .")
     app_path = Path(args.binary_path)
-    app = App(app_path)
-    state = await app.open()
+    app = App()
+    state = await app.find_or_start_by_path(app_path)
     app.resize(800, 600)
     app.enforce_size()
     if state == App.State.Launching:
