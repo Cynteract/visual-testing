@@ -47,6 +47,17 @@ class App:
             if time.time() - self.start_time > self.timeout:
                 raise TimeoutError(self.error_message)
 
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.enforce_size_task:
+            self.enforce_size_task.cancel()
+            try:
+                await self.enforce_size_task
+            except asyncio.CancelledError:
+                pass
+
     async def find_by_window(self, window_matcher: WindowMatcher, timeout: float = 5):
         """
         Finds a running app window by matching the window title with the given string. Sets self.pid and self.window when found.
