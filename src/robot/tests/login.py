@@ -12,7 +12,7 @@ class LoginTest:
         self.app = app
 
     async def runTest(self, username: str, password: str, test_id: str):
-        IMGDIR = Path("robot/tests/images")
+        IMGDIR = Path(__file__).parent / "images"
 
         # Browser login
         await browser_login_test(username, password, test_id)

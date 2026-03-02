@@ -22,7 +22,7 @@ def deploy_robot(robot_config: RobotConfig):
         sys.exit(1)
     logging.info("Platform Windows OK")
 
-    project_root = Path(__file__).parent.parent.resolve()
+    project_root = Path(__file__).parent.parent.parent.resolve()
     os.chdir(project_root)
 
     # Check python version against .python-version
@@ -71,7 +71,7 @@ def deploy_robot(robot_config: RobotConfig):
         logging.info(f"Pip requirements OK")
 
     # Install node and dependencies for firebase user scripts if not already installed
-    firebase_scripts_dir = project_root / "robot" / "firebase_user_scripts"
+    firebase_scripts_dir = project_root / "src" / "firebase_user_scripts"
     if not (firebase_scripts_dir / "node_modules").exists():
         logging.info(f"Install node dependencies for firebase user scripts.")
         subprocess.run(["fnm", "install"], cwd=firebase_scripts_dir, check=True)

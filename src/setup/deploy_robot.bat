@@ -19,6 +19,7 @@ IF %ERRORLEVEL% NEQ 0 (
 )
 
 :: Run the setup script
+set PYTHONPATH=src
 python -m setup robot
 
 pause

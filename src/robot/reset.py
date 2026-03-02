@@ -86,7 +86,7 @@ def reset_player_data(username: str, password: str):
             f"--username={username}",
             f"--password={password}",
         ],
-        cwd=Path(__file__).parent / "firebase_user_scripts",
+        cwd=Path(__file__).parent.parent / "firebase_user_scripts",
         check=True,
     )
 

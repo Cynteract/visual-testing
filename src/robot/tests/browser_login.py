@@ -8,7 +8,7 @@ from robot.utils import assert_image, click_image, screenshot, type_key, type_te
 
 
 async def browser_login_test(username: str, password: str, test_id: str):
-    IMGDIR = Path("robot/tests/images/chrome")
+    IMGDIR = Path(__file__).parent / "images" / "chrome"
 
     browser_binary = Path("C:/Program Files/Google/Chrome/Application/chrome.exe")
     async with App() as browser:
