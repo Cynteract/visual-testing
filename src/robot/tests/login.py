@@ -22,6 +22,12 @@ class LoginTest:
             not is_cookie_present()
         ), "Cookie for my.cynteract.com should not be present before login test"
 
+        # reject app update
+        await assert_image(
+            self.app, img_dir / "startup" / "assert_update_now.png", timeout=5
+        )
+        await click_image(self.app, img_dir / "startup" / "click_no.png")
+
         # wait for startup video
         if self.app.state == AppState.Launched:
             await asyncio.sleep(8)
@@ -29,10 +35,12 @@ class LoginTest:
             # wait for app to come to foreground
             await asyncio.sleep(0.5)
 
-        # Browser login
+        #
+
+        # browser login
         await browser_login_cookie_absent(username, password, test_id)
 
-        # # Login
+        # # login
         # await click_image(self.app, img_dir / "LoginLink.png")
         # await screenshot(self.app, "login_screen", test_id)
         # await click_image(self.app, img_dir / "Email.png")
@@ -41,7 +49,7 @@ class LoginTest:
         # await type_text(password, interval=0.05)
         # await click_image(self.app, img_dir / "LoginButton.png")
 
-        # Introduction
+        # introduction
         await assert_image(
             self.app, img_dir / "introduction" / "assert_welcome_title.png", timeout=10
         )
@@ -56,13 +64,13 @@ class LoginTest:
         await click_image(self.app, img_dir / "introduction" / "click_confirm.png")
         await assert_image(self.app, img_dir / "Game_center.png", timeout=15)
 
-        # Game center
+        # game center
         await screenshot(self.app, "game_center_screen", test_id)
         await click_image(self.app, img_dir / "Game_center.png", timeout=5)
         await assert_image(self.app, img_dir / "Please_connect.png", timeout=5)
         await click_image(self.app, img_dir / "Back.png")
 
-        # Logout
+        # logout
         await click_image(self.app, img_dir / "Settings.png")
         await click_image(self.app, img_dir / "Logout.png")
         await assert_image(self.app, img_dir / "LoginTitle.png", timeout=15)

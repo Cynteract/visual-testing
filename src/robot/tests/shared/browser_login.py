@@ -3,23 +3,13 @@ import asyncio
 import pynput
 
 from robot.app import App
-from robot.browser import (
-    DefaultBrowser,
-    detect_default_browser,
-    get_browser_window_matcher,
-)
+from robot.browser import get_browser_window_matcher
 from robot.config import get_small_image_dir
 from robot.utils import assert_image, click_image, screenshot, type_key, type_text
 
 
 async def browser_login_cookie_absent(username: str, password: str, test_id: str):
-    browser = detect_default_browser()
-    if browser == DefaultBrowser.CHROME:
-        img_dir = get_small_image_dir() / "chrome"
-    elif browser == DefaultBrowser.FIREFOX:
-        img_dir = get_small_image_dir() / "chrome"
-    else:
-        raise ValueError(f"Unsupported browser for login: {browser}")
+    img_dir = get_small_image_dir() / "browser"
     window_matcher = get_browser_window_matcher("Cynteract")
 
     async with App() as browser:
