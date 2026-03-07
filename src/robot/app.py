@@ -25,17 +25,21 @@ class WindowMatcher:
     class_name: str | None = None
 
 
+class AppState(Enum):
+    Uninitialized = "Uninitialized"
+    Launched = "Launched"
+    Grabbed = "Grabbed"
+
+
 class App:
+
     pid: int | None = None
     window_matcher: WindowMatcher | None = None
     window: pywinctl.Window | None = None
     enforce_size_task: asyncio.Task | None = None
     requested_size: tuple[int, int] | None = None
     file_path: Path | None = None
-
-    class State(Enum):
-        Launching = "Launching"
-        Running = "Running"
+    state: AppState = AppState.Uninitialized
 
     class _Timeout:
         def __init__(self, timeout: float, error_message: str):
@@ -67,7 +71,7 @@ class App:
         assert self.window
         self.window.activate()
 
-    async def find_or_start_by_path(self, path: Path) -> State:
+    async def find_or_start_by_path(self, path: Path):
         """
         Tries to open an app using the given file path and waits 5 seconds for it to be ready.
         If the app is already open, it is brought to the foreground.
@@ -85,15 +89,14 @@ class App:
             logging.info(f"Start app {self.file_path} .")
             process = subprocess.Popen([str(self.file_path)])
             self.pid = process.pid
-            app_state = self.State.Launching
+            self.state = AppState.Launched
         else:
-            app_state = self.State.Running
+            self.state = AppState.Grabbed
 
         self.window_matcher = WindowMatcher(pid=self.pid)
         await self._find_window()
         assert self.window
         self.window.activate()
-        return app_state
 
     async def _find_process(self, timeout: float = 5):
         """

@@ -32,6 +32,9 @@
       "name": "robot",
       "type": "debugpy",
       "request": "launch",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
       "module": "robot",
       "justMyCode": false
     }

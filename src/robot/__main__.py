@@ -28,17 +28,13 @@ async def main(args: RobotArguments):
     logging.info(f"Start robot with binary {args.binary_path} .")
     app_path = Path(args.binary_path)
     async with App() as app:
-        state = await app.find_or_start_by_path(app_path)
+        await app.find_or_start_by_path(app_path)
         app.resize(800, 600)
         app.enforce_size()
-        if state == App.State.Launching:
-            # wait for app to finish launching
-            await asyncio.sleep(10)
-        else:
-            # wait for app to come to foreground
-            await asyncio.sleep(1)
         test = LoginTest(app)
-        await test.runTest(args.username, args.password, args.test_id)
+        await test.clean_app_state_smoke_test(
+            args.username, args.password, args.test_id
+        )
 
 
 if __name__ == "__main__":

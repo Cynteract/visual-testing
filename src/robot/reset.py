@@ -5,10 +5,10 @@ import subprocess
 import winreg
 from pathlib import Path
 
-import plyvel
+from robot.browser import delete_local_storage
 
 
-def reset_app_state():
+def _reset_player_prefs():
     try:
         logging.info(
             "Remove registry key HKEY_CURRENT_USER\\Software\\Cynteract\\Cynteract."
@@ -25,6 +25,8 @@ def reset_app_state():
     except Exception as e:
         logging.error(f"Error removing registry key: {e}")
 
+
+def _reset_firestore():
     try:
         logging.info("Remove directories Cynteract, firebase-heartbeat, firestore.")
         for dir_path in [
@@ -55,21 +57,21 @@ def reset_app_state():
     except subprocess.CalledProcessError as e:
         logging.error(f"Error deleting credentials: {e}")
 
+
+def _reset_browser_local_storage():
+    logging.info("Delete local storage for *my.cynteract.com from browser.")
     try:
-        logging.info("Delete local storage for *my.cynteract.com from Chrome.")
-        db = plyvel.DB(
-            "C:/Users/ABrun/AppData/Local/Google/Chrome/User Data/Default/Local Storage/leveldb"
-        )
-        for key, _ in db:
-            decoded_key = key.decode("utf-8")
-            if (
-                decoded_key.startswith("_https://staging-my.cynteract.com")
-                or decoded_key.startswith("_https://testing-my.cynteract.com")
-                or decoded_key.startswith("_https://my.cynteract.com")
-            ):
-                db.delete(key)
+        delete_local_storage("my.cynteract.com")
+        delete_local_storage("staging-my.cynteract.com")
+        delete_local_storage("testing-my.cynteract.com")
     except Exception as e:
-        logging.error(f"Error deleting local storage: {e}")
+        logging.error(f"Error deleting local storage from browser: {e}")
+
+
+def reset_app_state():
+    _reset_player_prefs()
+    _reset_firestore()
+    _reset_browser_local_storage()
 
 
 def reset_player_data(username: str, password: str):
