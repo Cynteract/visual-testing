@@ -41,6 +41,8 @@ def _reset_firestore():
     except Exception as e:
         logging.error(f"Error removing directories: {e}")
 
+
+def _reset_auth():
     try:
         logging.info(
             "Delete credentials for com.Cynteract.GameCenter.cynteract-a52e4.firebase.auth."
@@ -71,6 +73,7 @@ def _reset_browser_local_storage():
 def reset_app_state():
     _reset_player_prefs()
     _reset_firestore()
+    _reset_auth()
     _reset_browser_local_storage()
 
 

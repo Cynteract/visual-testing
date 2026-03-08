@@ -13,6 +13,8 @@ import psutil
 import pywinctl
 import win32gui
 
+from robot.timeout import Timeout
+
 
 class MultipleMatchesFoundException(Exception):
     pass
@@ -41,16 +43,6 @@ class App:
     file_path: Path | None = None
     state: AppState = AppState.Uninitialized
 
-    class _Timeout:
-        def __init__(self, timeout: float, error_message: str):
-            self.timeout = timeout
-            self.error_message = error_message
-            self.start_time = time.time()
-
-        def check(self):
-            if time.time() - self.start_time > self.timeout:
-                raise TimeoutError(self.error_message)
-
     async def __aenter__(self):
         return self
 
@@ -70,6 +62,14 @@ class App:
         await self._find_window(timeout=timeout)
         assert self.window
         self.window.activate()
+
+    async def find_by_path(self, path: Path, timeout: float = 5):
+        """
+        Tries to find a running app by matching the process executable path with the given path. Sets self.pid and self.window when found.
+        """
+        self.file_path = path
+        await self._find_process(timeout=timeout)
+        self.state = AppState.Grabbed
 
     async def find_or_start_by_path(self, path: Path):
         """
@@ -102,7 +102,7 @@ class App:
         """
         Waits for a running process with the app file path to appear within the given number of seconds. Sets self.pid when found.
         """
-        timer = self._Timeout(
+        timer = Timeout(
             timeout,
             f"No running process found for app {self.file_path} within {timeout} seconds",
         )
@@ -121,7 +121,7 @@ class App:
         assert (
             self.window_matcher is not None
         ), "Either pid or window_matcher must be set to find the app window"
-        timer = self._Timeout(
+        timer = Timeout(
             timeout,
             f"No app window found for {self.file_path} within {timeout} seconds",
         )
@@ -154,7 +154,7 @@ class App:
         self.requested_size = (width, height)
         self.window.resizeTo(width, height)
 
-    def close(self):
+    def close(self, timeout: float = 5):
         """
         Tries to close the app defined by this App instance, waits max 5 seconds for the app to no longer be running.
         """
@@ -180,6 +180,13 @@ class App:
         if process.is_running():
             process.terminate()
 
+        timer = Timeout(
+            timeout, f"App with pid {self.pid} did not close within {timeout} seconds"
+        )
+        while process.is_running():
+            timer.check()
+            time.sleep(0.5)
+
     def enforce_size(self):
         """
         Brings the app window to the foreground and enforces it to be always on top.
@@ -188,16 +195,23 @@ class App:
         if not self.enforce_size_task:
             self.enforce_size_task = asyncio.create_task(self._enforce_size_routine())
 
+    def _enforce_size_once(self):
+        assert self.window, "App window is not available. Call open() first."
+        if self.window.isMinimized or self.window.isMaximized:
+            self.window.restore()
+        if self.requested_size:
+            self.window.resizeTo(*self.requested_size)
+        if self.window.position != (0, 0):
+            self.window.moveTo(0, 0)
+
     async def _enforce_size_routine(self):
-        while True:
-            if self.window:
-                if self.window.isMinimized or self.window.isMaximized:
-                    self.window.restore()
-                if self.requested_size:
-                    self.window.resizeTo(*self.requested_size)
-                if self.window.position != (0, 0):
-                    self.window.moveTo(0, 0)
-            await asyncio.sleep(0.5)
+        try:
+            while True:
+                if self.window:
+                    self._enforce_size_once()
+                await asyncio.sleep(0.5)
+        except asyncio.CancelledError:
+            pass
 
     def screenshot(self, save_path: Path) -> None:
         """
@@ -232,6 +246,10 @@ class App:
         assert self.window, "App window is not available. Call open() first."
         bbox = self._get_bounding_box()
 
+        # enforce size before taking screenshot
+        if self.enforce_size_task != None and self.window.isMaximized:
+            self._enforce_size_once()
+
         # load images, cv2 uses numpy arrays in BGR format
         # grabbing window only does not work on all windows, see https://github.com/python-pillow/Pillow/pull/8516#issuecomment-3794640267
         with PIL.ImageGrab.grab(bbox=bbox) as window_grab:
@@ -251,6 +269,12 @@ class App:
         # https://docs.opencv.org/4.13.0/d4/dc6/tutorial_py_template_matching.html
         match = cv2.matchTemplate(large_image, small_image, cv2.TM_CCOEFF_NORMED)
         yloc, xloc = numpy.where(match >= confidence)
+        if len(xloc) == 0:
+            return None
+        if len(xloc) > 20:
+            raise MultipleMatchesFoundException(
+                f"Too many ({len(xloc)}) matches found for image {small_image_path} with confidence {confidence}"
+            )
         # cluster matches with a pixel distance < 3
         clustered_xloc: list[int] = []
         clustered_yloc: list[int] = []
@@ -263,9 +287,7 @@ class App:
                 continue
             clustered_xloc.append(x)
             clustered_yloc.append(y)
-        if len(clustered_xloc) == 0:
-            return None
-        elif len(clustered_xloc) > 1:
+        if len(clustered_xloc) > 1:
             raise MultipleMatchesFoundException(
                 f"Multiple ({len(clustered_xloc)}) matches found for image {small_image_path} with confidence {confidence}"
             )

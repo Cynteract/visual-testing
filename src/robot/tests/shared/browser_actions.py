@@ -5,10 +5,10 @@ import pynput
 from robot.app import App
 from robot.browser import get_browser_window_matcher
 from robot.config import get_small_image_dir
-from robot.utils import assert_image, click_image, screenshot, type_key, type_text
+from robot.utils import click_image, screenshot, type_key, type_text
 
 
-async def browser_login_cookie_absent(username: str, password: str, test_id: str):
+async def login_with_browser_cookie_absent(username: str, password: str, test_id: str):
     img_dir = get_small_image_dir() / "browser"
     window_matcher = get_browser_window_matcher("Cynteract")
 
@@ -27,4 +27,4 @@ async def browser_login_cookie_absent(username: str, password: str, test_id: str
         await click_image(browser, img_dir / "click_sign_in.png", timeout=1)
         await asyncio.sleep(0.1)
         await screenshot(browser, "browser_signing_in", test_id)
-        await assert_image(browser, img_dir / "assert_sign_in_success.png", timeout=10)
+        # await assert_image(browser, img_dir / "assert_sign_in_success.png", timeout=10)

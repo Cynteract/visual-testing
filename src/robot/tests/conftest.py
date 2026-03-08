@@ -6,7 +6,6 @@ import pytest_asyncio
 
 from robot.app import App
 from robot.config import get_screenshot_dir
-from robot.reset import reset_app_state, reset_player_data
 
 
 def pytest_addoption(parser):
@@ -43,16 +42,6 @@ async def app(binary_path):
         app.resize(800, 600)
         app.enforce_size()
         yield app
-
-
-@pytest.fixture
-def no_app_state():
-    reset_app_state()
-
-
-@pytest.fixture
-def no_player_data(username, password):
-    reset_player_data(username, password)
 
 
 def pytest_runtest_makereport(item, call):

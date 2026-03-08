@@ -1,11 +1,11 @@
 import asyncio
-import time
 from pathlib import Path
 
 import pynput
 
 from robot.app import App
 from robot.config import get_screenshot_dir
+from robot.timeout import Timeout
 
 mouse = pynput.mouse.Controller()
 keyboard = pynput.keyboard.Controller()
@@ -37,7 +37,10 @@ async def type_key(key: pynput.keyboard.Key):
 
 
 async def click_image(app: App, image_path: Path, timeout: int = 5):
-    start_time = time.time()
+    timer = Timeout(
+        timeout,
+        f"Image {image_path} not found on screen within {timeout} seconds",
+    )
     while True:
         bbox_or_null = app.locate(image_path)
         if bbox_or_null:
@@ -50,23 +53,41 @@ async def click_image(app: App, image_path: Path, timeout: int = 5):
             mouse.click(pynput.mouse.Button.left, 1)
             await asyncio.sleep(0.2)
             return
-        elif time.time() - start_time > timeout:
-            raise RuntimeError(
-                f"Image {image_path} not found on screen within {timeout} seconds"
-            )
+        timer.check()
         await asyncio.sleep(0.5)
 
 
-async def assert_image(app: App, image_path: Path, timeout: int = 5) -> None:
-    start_time = time.time()
+async def left_click():
+    mouse.click(pynput.mouse.Button.left, 1)
+    await asyncio.sleep(0.2)
+
+
+async def assert_any_image(
+    app: App, image_paths: list[Path], timeout: float = 5.0
+) -> None:
+    timer = Timeout(
+        timeout,
+        f"None of the images {image_paths} found on screen within {timeout} seconds",
+    )
+    while True:
+        for image_path in image_paths:
+            bbox_or_null = app.locate(image_path)
+            if bbox_or_null:
+                return
+        timer.check()
+        await asyncio.sleep(0.5)
+
+
+async def assert_image(app: App, image_path: Path, timeout: float = 5.0) -> None:
+    timer = Timeout(
+        timeout,
+        f"Image {image_path} not found on screen within {timeout} seconds",
+    )
     while True:
         bbox_or_null = app.locate(image_path)
         if bbox_or_null:
             return
-        elif time.time() - start_time > timeout:
-            raise RuntimeError(
-                f"Image {image_path} not found on screen within {timeout} seconds"
-            )
+        timer.check()
         await asyncio.sleep(0.5)
 
 
