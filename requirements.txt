@@ -2,6 +2,7 @@ opencv-python
 psutil
 pygithub
 pytest
+pytest-asyncio
 pynput
 pywinctl
 pillow

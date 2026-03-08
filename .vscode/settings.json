@@ -15,5 +15,8 @@
     "source.unusedImports": "always"
   },
   "python.autoComplete.extraPaths": ["../sdk-python"],
-  "python.analysis.extraPaths": ["../sdk-python"]
+  "python.analysis.extraPaths": ["../sdk-python"],
+  "python.testing.pytestArgs": ["src/robot"],
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true
 }

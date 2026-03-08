@@ -1,14 +1,10 @@
 import argparse
-import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-import PIL.ImageGrab
+import pytest
 
-from robot.app import App
-from robot.config import get_screenshot_dir
-from robot.tests.login import LoginTest
 from shared.utils import load_env_file
 
 
@@ -20,31 +16,24 @@ class RobotArguments:
     test_id: str = "default"
 
 
-from .reset import reset_app_state, reset_player_data
-
-
-async def main(args: RobotArguments):
+def main(args: RobotArguments):
     assert args.binary_path is not None, "Binary path must be provided"
-    logging.info("Reset app state before starting tests.")
-    reset_app_state()
-    reset_player_data(args.username, args.password)
+    # run pytest
     logging.info(f"Start robot with binary {args.binary_path} .")
-    try:
-        app_path = Path(args.binary_path)
-        async with App() as app:
-            await app.find_or_start_by_path(app_path)
-            app.resize(800, 600)
-            app.enforce_size()
-            test = LoginTest(app)
-            await test.clean_app_state_smoke_test(
-                args.username, args.password, args.test_id
-            )
-    except Exception as e:
-        # take screenshot of the whole screen for debugging
-        screenshot_dir = get_screenshot_dir(args.test_id)
-        with PIL.ImageGrab.grab() as img:
-            img.save(screenshot_dir / f"ERROR.png")
-        raise e
+    pytest.main(
+        [
+            "-x",
+            str(Path(__file__).parent / "tests"),
+            "--username",
+            args.username,
+            "--password",
+            args.password,
+            "--test-id",
+            args.test_id,
+            "--binary-path",
+            args.binary_path,
+        ]
+    )
 
 
 if __name__ == "__main__":
@@ -86,4 +75,4 @@ if __name__ == "__main__":
         password=args.password,
         test_id=args.test_id,
     )
-    asyncio.run(main(arguments))
+    main(arguments)
