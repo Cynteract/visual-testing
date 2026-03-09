@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -5,16 +6,16 @@ import pytest
 from robot.app import App, AppState
 from robot.config import get_small_image_dir, password, username
 from robot.reset import reset_app_state
-from robot.tests.shared.app_navigation import Pages, go_to_page, wait_for_page
-from robot.tests.shared.browser_actions import login_with_browser_cookie_absent
-from robot.utils import (
-    assert_any_image,
-    assert_image,
-    click_image,
-    left_click,
-    screenshot,
-    type_text,
+from robot.tests.shared.app_navigation import (
+    Pages,
+    detect_current_page,
+    go_to_page,
+    transition,
+    wait_for_page,
 )
+from robot.tests.shared.browser_actions import login_with_browser_cookie_absent
+from robot.timeout import Timeout
+from robot.utils import click_image, screenshot, type_text
 
 REGION = (0, 0, 800, 600)
 img_dir = get_small_image_dir()
@@ -36,14 +37,8 @@ async def test_first_start_login(binary_path, test_id):
         await app.find_or_start_by_path(Path(binary_path))
         app.resize(800, 600)
         app.enforce_size()
-        await wait_for_page(app, Pages.startup, timeout=15)
-
-        # reject app update
-        await assert_image(app, img_dir / "startup/assert_update_now.png", timeout=5)
-        await click_image(app, img_dir / "startup/click_no.png")
-
-        # skip second intro video
-        await left_click()
+        await wait_for_page(app, Pages.update, timeout=15)
+        await transition(app, Pages.update, Pages._next)
 
         # browser login
         await login_with_browser_cookie_absent(username, password, test_id)
@@ -58,7 +53,7 @@ async def test_email_password_login(app, test_id):
 
     # login
     await click_image(app, img_dir / "login/click_login_link.png")
-    await screenshot(app, "login_screen", test_id)
+    await screenshot(app, "login_email_password", test_id)
     await click_image(app, img_dir / "login/click_email.png")
     await type_text(username, interval=0.05)
     await click_image(app, img_dir / "login/click_password.png")
@@ -70,11 +65,13 @@ async def test_email_password_login(app, test_id):
 
 
 async def _assert_logged_in(app: App, timeout: float):
-    await assert_any_image(
-        app,
-        [
-            img_dir / "introduction/assert_welcome_title.png",
-            img_dir / "home/click_game_center.png",
-        ],
-        timeout=timeout,
-    )
+    timer = Timeout(timeout, "Failed to log in within {timeout} seconds")
+    while True:
+        timer.check()
+        try:
+            current_page = await detect_current_page(app)
+        except TimeoutError:
+            continue
+        if current_page == Pages.home or current_page == Pages.introduction:
+            return
+        await asyncio.sleep(0.5)

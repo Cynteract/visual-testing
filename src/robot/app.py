@@ -12,6 +12,7 @@ import PIL.ImageGrab
 import psutil
 import pywinctl
 import win32gui
+from cv2.typing import MatLike
 
 from robot.timeout import Timeout
 
@@ -43,6 +44,8 @@ class App:
     requested_size: tuple[int, int] | None = None
     file_path: Path | None = None
     state: AppState = AppState.Uninitialized
+
+    cached_large_image: MatLike | None = None
 
     async def __aenter__(self):
         return self
@@ -239,6 +242,28 @@ class App:
             client_frame.bottom,
         )
 
+    def _get_large_image(self) -> MatLike:
+        bbox = self._get_bounding_box()
+        # load images, cv2 uses numpy arrays in BGR format
+        # grabbing window only does not work on all windows, see https://github.com/python-pillow/Pillow/pull/8516#issuecomment-3794640267
+        with PIL.ImageGrab.grab(bbox=bbox) as window_grab:
+            window_image = numpy.array(window_grab)
+            return cv2.cvtColor(window_image, cv2.COLOR_RGB2BGR)
+
+    class _CachedScreenshot:
+        def __init__(self, app: "App"):
+            self.app = app
+
+        def __enter__(self):
+            self.app.cached_large_image = self.app._get_large_image()
+            return self.app.cached_large_image
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            self.app.cached_large_image = None
+
+    def cached_screenshot(self) -> _CachedScreenshot:
+        return self._CachedScreenshot(self)
+
     def locate(
         self, small_image_path: Path, confidence: float = 0.8
     ) -> tuple[int, int, int, int] | None:
@@ -254,11 +279,10 @@ class App:
         if self.enforce_size_task != None and self.window.isMaximized:
             self._enforce_size_once()
 
-        # load images, cv2 uses numpy arrays in BGR format
-        # grabbing window only does not work on all windows, see https://github.com/python-pillow/Pillow/pull/8516#issuecomment-3794640267
-        with PIL.ImageGrab.grab(bbox=bbox) as window_grab:
-            window_image = numpy.array(window_grab)
-            large_image = cv2.cvtColor(window_image, cv2.COLOR_RGB2BGR)
+        if self.cached_large_image is not None:
+            large_image = self.cached_large_image
+        else:
+            large_image = self._get_large_image()
         small_image = cv2.imread(small_image_path)
         assert (
             small_image is not None

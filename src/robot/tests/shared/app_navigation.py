@@ -29,20 +29,21 @@ async def detect_current_page(app: App, timeout: float = 2) -> Pages:
         f"Current page not detected within {timeout} seconds",
     )
     while True:
-        if app.locate(img_dir / "startup/assert_intro.png", confidence=0.95):
-            return Pages.startup
-        elif app.locate(img_dir / "startup/assert_update_now.png"):
-            return Pages.update
-        elif app.locate(img_dir / "home/assert_stats_label.png"):
-            return Pages.home
-        elif app.locate(img_dir / "login/assert_login_title.png"):
-            return Pages.login
-        elif app.locate(img_dir / "settings/assert_title.png"):
-            return Pages.settings
-        elif app.locate(img_dir / "introduction/assert_welcome_title.png"):
-            return Pages.introduction
-        elif app.locate(img_dir / "home/assert_please_connect_label.png"):
-            return Pages.please_connect
+        with app.cached_screenshot():
+            if app.locate(img_dir / "startup/assert_intro.png", confidence=0.95):
+                return Pages.startup
+            elif app.locate(img_dir / "startup/assert_update_now.png"):
+                return Pages.update
+            elif app.locate(img_dir / "home/assert_stats_label.png"):
+                return Pages.home
+            elif app.locate(img_dir / "login/assert_login_title.png"):
+                return Pages.login
+            elif app.locate(img_dir / "settings/assert_title.png"):
+                return Pages.settings
+            elif app.locate(img_dir / "introduction/assert_welcome_title.png"):
+                return Pages.introduction
+            elif app.locate(img_dir / "home/assert_please_connect_label.png"):
+                return Pages.please_connect
         timer.check()
         await asyncio.sleep(0.3)
     return Pages.unknown
