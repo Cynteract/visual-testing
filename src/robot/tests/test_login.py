@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from robot.app import App, AppState
-from robot.config import get_small_image_dir
+from robot.config import get_small_image_dir, password, username
 from robot.reset import reset_app_state
 from robot.tests.shared.app_navigation import Pages, go_to_page, wait_for_page
 from robot.tests.shared.browser_actions import login_with_browser_cookie_absent
@@ -21,7 +21,7 @@ img_dir = get_small_image_dir()
 
 
 @pytest.mark.asyncio
-async def test_first_start_login(binary_path, username, password, test_id):
+async def test_first_start_login(binary_path, test_id):
     async with App() as app:
         # close app if it is already running from previous test
         try:
@@ -51,31 +51,9 @@ async def test_first_start_login(binary_path, username, password, test_id):
         # assert logged in
         await _assert_logged_in(app, timeout=20)
 
-        # await screenshot(app, "introduction_screen", test_id)
-        # await click_image(app, img_dir / "introduction/click_enter.png")
-        # await assert_image(
-        #     app, img_dir / "introduction/assert_blob_face.png", timeout=10
-        # )
-        # await click_image(app, img_dir / "introduction/click_skip.png")
-        # await click_image(app, img_dir / "introduction/click_name_field.png")
-        # await type_text("visualTesting", interval=0.05)
-        # await click_image(app, img_dir / "introduction/click_confirm.png")
-        # await assert_image(app, img_dir / "login/Game_center.png", timeout=15)
-
-        # # game center
-        # await screenshot(app, "game_center_screen", test_id)
-        # await click_image(app, img_dir / "home/click_game_center.png", timeout=5)
-        # await assert_image(app, img_dir / "login/Please_connect.png", timeout=5)
-        # await click_image(app, img_dir / "login/Back.png")
-
-        # # logout
-        # await click_image(app, img_dir / "login/Settings.png")
-        # await click_image(app, img_dir / "login/Logout.png")
-        # await assert_image(app, img_dir / "login/assert_login_title.png", timeout=15)
-
 
 @pytest.mark.asyncio
-async def test_email_password_login(app, username, password, test_id):
+async def test_email_password_login(app, test_id):
     await go_to_page(app, Pages.login)
 
     # login

@@ -6,6 +6,7 @@ import winreg
 from pathlib import Path
 
 from robot.browser import delete_local_storage
+from robot.config import password, username
 
 
 def _reset_player_prefs():
@@ -77,7 +78,7 @@ def reset_app_state():
     _reset_browser_local_storage()
 
 
-def reset_player_data(username: str, password: str):
+def reset_player_data():
     logging.info("Reset player data for user %s.", username)
     subprocess.run(
         [

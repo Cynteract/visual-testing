@@ -1,17 +1,15 @@
+import asyncio
 from pathlib import Path
 
 import PIL.ImageGrab
 import pytest
 import pytest_asyncio
 
-from robot.app import App
+from robot.app import App, AppState
 from robot.config import get_screenshot_dir
 from shared.utils import load_env_file
 
 env = load_env_file()
-
-assert "ROBOT_USERNAME" in env, "ROBOT_USERNAME must be set in .env file"
-assert "ROBOT_PASSWORD" in env, "ROBOT_PASSWORD must be set in .env file"
 
 
 def pytest_addoption(parser):
@@ -22,16 +20,6 @@ def pytest_addoption(parser):
         default=env.get("BINARY_PATH"),
         required=env.get("BINARY_PATH") is None,
     )
-
-
-@pytest.fixture
-def username(pytestconfig):
-    return env.get("ROBOT_USERNAME")
-
-
-@pytest.fixture
-def password(pytestconfig):
-    return env.get("ROBOT_PASSWORD")
 
 
 @pytest.fixture
@@ -50,6 +38,8 @@ async def app(binary_path):
         await app.find_or_start_by_path(Path(binary_path))
         app.resize(800, 600)
         app.enforce_size()
+        if app.state == AppState.Launched:
+            await asyncio.sleep(3)
         yield app
 
 
