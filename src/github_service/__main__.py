@@ -53,8 +53,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     robot_args = RobotArguments(
         binary_path=None,
-        username=args.username,
-        password=args.password,
     )
     github_service_args = GithubServiceConfig(
         github_pat=args.github_pat,

@@ -11,8 +11,6 @@ from shared.utils import load_env_file
 @dataclass
 class RobotArguments:
     binary_path: str | None
-    username: str
-    password: str
     test_id: str = "default"
 
 
@@ -24,10 +22,6 @@ def main(args: RobotArguments):
         [
             "-x",
             str(Path(__file__).parent / "tests"),
-            "--username",
-            args.username,
-            "--password",
-            args.password,
             "--test-id",
             args.test_id,
             "--binary-path",
@@ -48,20 +42,6 @@ if __name__ == "__main__":
         help="Path to the Cynteract App binary.",
     )
     parser.add_argument(
-        "--username",
-        type=str,
-        required=env.get("USERNAME") is None,
-        default=env.get("USERNAME"),
-        help="Username for login.",
-    )
-    parser.add_argument(
-        "--password",
-        type=str,
-        required=env.get("PASSWORD") is None,
-        default=env.get("PASSWORD"),
-        help="Password for login.",
-    )
-    parser.add_argument(
         "--test-id",
         type=str,
         required=False,
@@ -71,8 +51,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     arguments = RobotArguments(
         binary_path=args.binary_path,
-        username=args.username,
-        password=args.password,
         test_id=args.test_id,
     )
     main(arguments)

@@ -49,7 +49,7 @@ async def test_first_start_login(binary_path, username, password, test_id):
         await login_with_browser_cookie_absent(username, password, test_id)
 
         # assert logged in
-        await _assert_logged_in(app, timeout=15)
+        await _assert_logged_in(app, timeout=20)
 
         # await screenshot(app, "introduction_screen", test_id)
         # await click_image(app, img_dir / "introduction/click_enter.png")

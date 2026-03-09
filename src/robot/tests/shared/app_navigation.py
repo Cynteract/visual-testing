@@ -4,7 +4,7 @@ from enum import Enum
 from robot.app import App
 from robot.config import get_small_image_dir
 from robot.timeout import Timeout
-from robot.utils import click_image
+from robot.utils import click_image, left_click
 
 
 class Pages(Enum):
@@ -13,6 +13,7 @@ class Pages(Enum):
     help = "help"
     settings = "settings"
     startup = "startup"
+    update = "update"
 
 
 img_dir = get_small_image_dir()
@@ -26,6 +27,8 @@ async def detect_current_page(app: App, timeout: float = 2) -> Pages:
     while True:
         if app.locate(img_dir / "startup/assert_intro.png", confidence=0.95):
             return Pages.startup
+        elif app.locate(img_dir / "startup/assert_update_now.png"):
+            return Pages.update
         elif app.locate(img_dir / "home/click_game_center.png"):
             return Pages.home
         elif app.locate(img_dir / "login/assert_login_title.png"):
@@ -63,16 +66,13 @@ async def go_to_page(app: App, page: Pages):
         elif current_page == Pages.settings:
             await click_image(app, img_dir / "settings/click_logout.png")
             await wait_for_page(app, Pages.login)
-        elif page == Pages.startup:
+        elif current_page == Pages.startup:
+            # wait for the startup video to finish
+            await wait_for_page(app, Pages.update, timeout=5)
+            await go_to_page(app, Pages.login)
+        elif current_page == Pages.update:
             # reject app update
-            await assert_image(
-                app, img_dir / "startup/assert_update_now.png", timeout=5
-            )
             await click_image(app, img_dir / "startup/click_no.png")
-
-            # skip browser login if it is first start
-            try:
-                await click_image(app, img_dir / "login/click_cancel.png", timeout=5)
-            except TimeoutError:
-                pass
-            await wait_for_page(app, Pages.login)
+            # skip second intro video
+            await left_click()
+            await go_to_page(app, Pages.login)

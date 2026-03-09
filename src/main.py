@@ -14,8 +14,6 @@ logging.basicConfig(level=logging.INFO)
 async def main():
     env = load_env_file()
     assert env.get("GITHUB_PAT") is not None, "GITHUB_PAT not found in environment"
-    assert env.get("USERNAME") is not None, "USERNAME not found in environment"
-    assert env.get("PASSWORD") is not None, "PASSWORD not found in environment"
     assert env.get("VRT_API_URL") is not None, "VRT_API_URL not found in environment"
     assert (
         env.get("VRT_ADMIN_API_KEY") is not None
@@ -31,8 +29,6 @@ async def main():
     ), "VRT_FRONTEND_URL not found in environment"
 
     robot_args = RobotArguments(
-        username=env["USERNAME"],
-        password=env["PASSWORD"],
         binary_path=env.get("BINARY_PATH"),
     )
     github_service_args = GithubServiceConfig(

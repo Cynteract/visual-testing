@@ -31,6 +31,7 @@ class AppState(Enum):
     Uninitialized = "Uninitialized"
     Launched = "Launched"
     Grabbed = "Grabbed"
+    Closed = "Closed"
 
 
 class App:
@@ -186,6 +187,9 @@ class App:
         while process.is_running():
             timer.check()
             time.sleep(0.5)
+
+        self.state = AppState.Closed
+        self.pid = None
 
     def enforce_size(self):
         """
