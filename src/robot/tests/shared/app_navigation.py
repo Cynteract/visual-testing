@@ -16,6 +16,7 @@ class Pages(Enum):
     startup = "startup"
     update = "update"
     please_connect = "please_connect"
+    game_center = "game_center"
     # set of possible pages, depending on app state
     _next = "_next"
 
@@ -81,7 +82,9 @@ async def go_to_page(app: App, target: Pages):
             current = await transition(app, current, target)
 
 
-async def transition(app, current: Pages, target: Pages, timeout: float = 4.0) -> Pages:
+async def transition(
+    app, current: Pages, target: Pages, timeout: float | None = None
+) -> Pages:
     tr = (current, target)
     if tr == (Pages.startup, Pages._next):
         await wait_for_page(app, Pages.update, timeout=5)
@@ -95,11 +98,13 @@ async def transition(app, current: Pages, target: Pages, timeout: float = 4.0) -
         await click_image(app, img_dir / "login/click_password.png")
         await type_text(password, interval=0.05)
         await click_image(app, img_dir / "login/click_login_button.png")
+        if timeout is None:
+            timeout = 10.0
     elif tr == (Pages.settings, Pages.login):
         await click_image(app, img_dir / "settings/click_logout.png")
     elif tr == (Pages.home, Pages.settings):
         await click_image(app, img_dir / "home/click_settings.png")
-    elif tr == (Pages.home, Pages.please_connect):
+    elif tr == (Pages.home, Pages.game_center):
         await click_image(app, img_dir / "home/click_game_center.png")
     elif tr == (Pages.please_connect, Pages._next):
         await click_image(app, img_dir / "click_back.png")
@@ -108,8 +113,12 @@ async def transition(app, current: Pages, target: Pages, timeout: float = 4.0) -
     else:
         raise Exception(f"No transition defined from {current} to {target}")
 
+    if timeout is None:
+        timeout = 4.0
+
     timer = Timeout(
-        2, f"Failed to transition from {current} to {target} within 2 seconds"
+        timeout,
+        f"Failed to transition from {current} to {target} within {timeout} seconds",
     )
     next = current
     while next == current:

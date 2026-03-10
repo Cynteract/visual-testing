@@ -16,7 +16,9 @@ img_dir = get_small_image_dir()
 
 @pytest.mark.asyncio
 async def test_please_connect(app, test_id):
-    await go_to_page(app, Pages.please_connect)
+    await go_to_page(app, Pages.home)
+    await transition(app, Pages.home, Pages.game_center)
+    assert await detect_current_page(app) == Pages.please_connect
     await screenshot(app, "please_connect", test_id)
 
 
