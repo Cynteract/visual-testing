@@ -36,11 +36,11 @@ async def test_introduction_page(app, test_id):
         await transition(app, Pages.login, Pages._next)
 
     assert await detect_current_page(app) == Pages.introduction
-    await screenshot(app, "introduction_welcome_screen", test_id)
+    await screenshot(app, "introduction_welcome", test_id)
     await click_image(app, img_dir / "introduction/click_enter.png")
     await assert_image(app, img_dir / "introduction/assert_blob_face.png", timeout=10)
     await click_image(app, img_dir / "introduction/click_skip.png")
-    await screenshot(app, "introduction_buddy_name_screen", test_id)
+    await screenshot(app, "introduction_buddy_name", test_id)
     await click_image(app, img_dir / "introduction/click_name_field.png")
     await type_text("visualTesting", interval=0.05)
     await click_image(app, img_dir / "introduction/click_confirm.png")

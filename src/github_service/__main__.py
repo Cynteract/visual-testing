@@ -9,7 +9,7 @@ from robot.__main__ import RobotArguments
 async def main(args: GithubServiceConfig):
     service = Service(config=args)
     if args.single_run_commit:
-        await service.process_commit(args.single_run_commit)
+        await service.process_commit(args.single_run_commit, force_run=True)
     else:
         logging.info(f"Start processing commits.")
         await service.run()

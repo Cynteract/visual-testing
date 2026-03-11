@@ -5,7 +5,7 @@ import pynput
 from robot.app import App
 from robot.browser import get_browser_window_matcher
 from robot.config import get_small_image_dir
-from robot.utils import click_image, screenshot, type_key, type_text
+from robot.utils import assert_image, click_image, screenshot, type_key, type_text
 
 
 async def login_with_browser_cookie_absent(username: str, password: str, test_id: str):
@@ -17,8 +17,9 @@ async def login_with_browser_cookie_absent(username: str, password: str, test_id
         browser.resize(800, 600)
         browser.enforce_size()
 
-        await screenshot(browser, "browser_sign_in_page", test_id)
-        await click_image(browser, img_dir / "enter_email.png", timeout=5)
+        await assert_image(browser, img_dir / "enter_email.png", timeout=5)
+        await screenshot(browser, "browser_sign_in", test_id)
+        await click_image(browser, img_dir / "enter_email.png", timeout=1)
         await type_text(username, interval=0.05)
         # cancel any password manager popups
         await type_key(pynput.keyboard.Key.esc)

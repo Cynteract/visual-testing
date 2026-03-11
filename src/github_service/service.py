@@ -20,7 +20,7 @@ from visual_regression_tracker import (
     types,
 )
 
-from robot.__main__ import RobotArguments, main
+from robot.__main__ import RobotArguments, async_main
 from robot.config import get_builds_download_dir, get_screenshot_dir
 
 
@@ -196,7 +196,7 @@ class Service:
             app_folder = await self.get_app_folder(version)
             self.config.robot_args.binary_path = str(app_folder / "Cynteract.exe")
             self.config.robot_args.test_id = version
-            await main(self.config.robot_args)
+            await async_main(self.config.robot_args)
 
             # upload screenshots
             vrt_result = await self.upload_screenshots(version, branch)
@@ -238,7 +238,9 @@ class Service:
                 zip_ref.extractall(app_folder)
         return app_folder
 
-    async def process_commit(self, commit_sha: str) -> CommitTestStatus:
+    async def process_commit(
+        self, commit_sha: str, force_run: bool = False
+    ) -> CommitTestStatus:
         """
         Check status of commit. Execute robot if not already done. Check for the result of the visual regression test.
         Returns True if processing is complete, False otherwise.
@@ -257,6 +259,7 @@ class Service:
         if (
             commit_status is None
             or CommitTestStatus.ROBOT_PENDING.value in commit_status.description
+            or force_run
         ):
             # start robot
             commit_status = commit.create_status(

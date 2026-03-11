@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +13,12 @@ from shared.utils import load_env_file
 class RobotArguments:
     binary_path: str | None
     test_id: str = "default"
+
+
+async def async_main(args: RobotArguments):
+    # avoid RuntimeError: Cannot run the event loop while another loop is running
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, main, args)
 
 
 def main(args: RobotArguments):
