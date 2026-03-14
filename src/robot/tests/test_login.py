@@ -1,5 +1,4 @@
 import asyncio
-from pathlib import Path
 
 import pytest
 
@@ -26,7 +25,7 @@ async def test_first_start_login(binary_path, test_id):
     async with App() as app:
         # close app if it is already running from previous test
         try:
-            await app.find_by_path(Path(binary_path), timeout=0.2)
+            await app.find_by_path(binary_path, timeout=0.2)
         except TimeoutError:
             pass
         if app.state == AppState.Grabbed:
@@ -34,7 +33,7 @@ async def test_first_start_login(binary_path, test_id):
 
         # reset and restart app for first start experience
         reset_app_state()
-        await app.find_or_start_by_path(Path(binary_path))
+        await app.find_or_start_by_path(binary_path)
         app.resize(800, 600)
         app.enforce_size()
         await wait_for_page(app, Pages.update, timeout=15)

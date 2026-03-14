@@ -3,9 +3,10 @@ psutil
 pygithub
 pytest
 pytest-asyncio
+pytest-html
 pynput
 pywinctl
 pillow
 pyinfra
-visual_regression_tracker @ git+https://github.com/adabru/sdk-python.git@44877795ff4b4d0d5e3f84427fd1af5f0ef8b707
+visual_regression_tracker @ git+https://github.com/adabru/sdk-python.git@12cd492e56c00b74744bd00a9495cc39edff8226
 plyvel-ci

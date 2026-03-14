@@ -1,3 +1,6 @@
+import os
+
+
 def load_env_file() -> dict[str, str]:
     # Load .env file
     env = {}
@@ -6,4 +9,5 @@ def load_env_file() -> dict[str, str]:
             if line.strip() and not line.startswith("#"):
                 key, value = line.strip().split("=", 1)
                 env[key] = value
+                os.environ[key] = value
     return env

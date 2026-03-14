@@ -3,6 +3,7 @@ import logging
 import subprocess
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
@@ -44,6 +45,7 @@ class App:
     requested_size: tuple[int, int] | None = None
     file_path: Path | None = None
     state: AppState = AppState.Uninitialized
+    debug_dir: Path | None = None
 
     cached_large_image: MatLike | None = None
 
@@ -94,11 +96,13 @@ class App:
             process = subprocess.Popen([str(self.file_path)])
             self.pid = process.pid
             self.state = AppState.Launched
+            window_timeout = 15.0
         else:
             self.state = AppState.Grabbed
+            window_timeout = 5.0
 
         self.window_matcher = WindowMatcher(pid=self.pid)
-        await self._find_window()
+        await self._find_window(timeout=window_timeout)
         assert self.window
         self.window.activate()
 
@@ -118,7 +122,7 @@ class App:
                 timer.check()
                 await asyncio.sleep(0.5)
 
-    async def _find_window(self, timeout: float = 5):
+    async def _find_window(self, timeout: float):
         """
         Waits for the app window to appear within the given number of seconds. Sets self.window when found.
         """
@@ -247,6 +251,12 @@ class App:
         # load images, cv2 uses numpy arrays in BGR format
         # grabbing window only does not work on all windows, see https://github.com/python-pillow/Pillow/pull/8516#issuecomment-3794640267
         with PIL.ImageGrab.grab(bbox=bbox) as window_grab:
+            if self.debug_dir is not None:
+                self.debug_dir.mkdir(parents=True, exist_ok=True)
+                timestamp = (
+                    datetime.now().isoformat(timespec="milliseconds").replace(":", "-")
+                )
+                window_grab.save(self.debug_dir / f"screenshot_{timestamp}.png")
             window_image = numpy.array(window_grab)
             return cv2.cvtColor(window_image, cv2.COLOR_RGB2BGR)
 

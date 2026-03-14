@@ -21,7 +21,7 @@ from visual_regression_tracker import (
 )
 
 from robot.__main__ import RobotArguments, async_main
-from robot.config import get_builds_download_dir, get_screenshot_dir
+from robot.config import get_data_dir, get_screenshot_dir
 
 
 @dataclass
@@ -157,7 +157,11 @@ class Service:
                         image_data = f.read()
                         imagebase64 = base64.b64encode(image_data).decode("utf-8")
                         result = vrt.track(
-                            TestRun(name=image_path.stem, imageBase64=imagebase64)
+                            TestRun(
+                                name=image_path.stem,
+                                imageBase64=imagebase64,
+                                diffTollerancePercent=0.2,
+                            )
                         )
                         match result.testRunResponse.status:
                             case types.TestRunStatus.OK:
@@ -172,8 +176,9 @@ class Service:
 
     async def get_version_and_branch(self, commit: Commit) -> tuple[str, str]:
         branch = None
-        if any(
-            branch.name == "development" for branch in commit.get_branches_where_head()
+        development_branch = self.repo.get_branch("development")
+        if development_branch.commit.sha == commit.sha or any(
+            c.sha == commit.sha for c in development_branch.commit.parents
         ):
             version_info = await self.get_version_info(
                 "--ci-development", "--commitish=" + commit.sha
@@ -220,7 +225,7 @@ class Service:
             )
 
     async def get_app_folder(self, version: str) -> Path:
-        app_folder = get_builds_download_dir() / f"Cynteract-{version}"
+        app_folder = get_data_dir(version) / f"Cynteract-{version}"
         if not app_folder.exists():
             zip_path = app_folder.with_name(app_folder.name + ".zip")
             if not zip_path.exists():
@@ -256,11 +261,17 @@ class Service:
                 commit_status = status
                 break
 
-        if (
-            commit_status is None
-            or CommitTestStatus.ROBOT_PENDING.value in commit_status.description
-            or force_run
-        ):
+        commit_test_status = None
+        if commit_status is None:
+            commit_test_status = CommitTestStatus.ROBOT_PENDING
+        else:
+            commit_test_status = CommitTestStatus.ERROR
+            for status in CommitTestStatus:
+                if status.value in commit_status.description:
+                    commit_test_status = status
+                    break
+
+        if commit_test_status is CommitTestStatus.ROBOT_PENDING or force_run:
             # start robot
             commit_status = commit.create_status(
                 state="pending",
@@ -287,7 +298,8 @@ class Service:
                 target_url=test_result.target_url if test_result.target_url else "",
             )
             return test_result.test_status
-        elif CommitTestStatus.VRT_PENDING.value in commit_status.description:
+        elif commit_test_status is CommitTestStatus.VRT_PENDING:
+            assert commit_status is not None
             # check if human review is done
             build = self.vrt_client.get_build(ciBuildId=version)
             if build.status == "passed":
@@ -320,11 +332,23 @@ class Service:
                     f"Unknown VRT build status '{build.status}' for commit {commit.sha}"
                 )
                 return CommitTestStatus.ERROR
+        elif (
+            commit_test_status is CommitTestStatus.ROBOT_FAILURE
+            or commit_test_status is CommitTestStatus.ROBOT_SKIPPED
+            or commit_test_status is CommitTestStatus.SUCCESS
+            or commit_test_status is CommitTestStatus.VRT_FAILURE
+            or commit_test_status is CommitTestStatus.ERROR
+        ):
+            assert commit_status is not None
+            logging.info(
+                f"Robot already finished for commit {commit.sha} with status {commit_status.description}."
+            )
+            return commit_test_status
         else:
             logging.error(
-                f'No action defined for commit {commit.sha} with status "{commit_status.description}"'
+                f'No action defined for commit {commit.sha} with status "{commit_test_status}"'
             )
-            return CommitTestStatus.ERROR
+            return commit_test_status
 
     async def run(self):
         # poll action runs
@@ -347,16 +371,27 @@ class Service:
             # API docs: https://docs.github.com/en/rest/actions/workflow-runs?apiVersion=2022-11-28#list-workflow-runs-for-a-repository
             logging.info("Retrieve recent workflow runs.")
             dev_build_runs = dev_build.get_runs(
-                status="success", created=f">{cutoff_date.strftime('%Y-%m-%d')}"
+                status="success",
+                head_sha=self.repo.get_branch("development").commit.sha,
+                created=f">{cutoff_date.strftime('%Y-%m-%d')}",
             )
             pr_build_runs = pr_build.get_runs(
-                status="success", created=f">{cutoff_date.strftime('%Y-%m-%d')}"
+                status="success",
+                created=f">{cutoff_date.strftime('%Y-%m-%d')}",
             )
 
             # don't consider older runs if their visual tests (robot + human) are complete
             cutoff_date = datetime.now(timezone.utc) - timedelta(minutes=5)
 
-            for run in list(dev_build_runs) + list(pr_build_runs):
+            # don't consider runs for merged PRs or for non-head commits of open PRs
+            current_pr_build_runs = []
+            for run in pr_build_runs:
+                for pr in run.pull_requests:
+                    if pr.merged or pr.head.sha != run.head_sha:
+                        continue
+                    current_pr_build_runs.append(run)
+
+            for run in list(dev_build_runs) + list(current_pr_build_runs):
                 test_status = await self.process_commit(run.head_sha)
                 # keep polling if human visual tests are still pending
                 if test_status != CommitTestStatus.VRT_PENDING:

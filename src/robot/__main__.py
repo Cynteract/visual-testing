@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from robot.app import AppState
+from robot.config import get_data_dir
 from shared.utils import load_env_file
 
 
@@ -13,6 +15,7 @@ from shared.utils import load_env_file
 class RobotArguments:
     binary_path: str | None
     test_id: str = "default"
+    close_app_after_tests: bool = True
 
 
 async def async_main(args: RobotArguments):
@@ -33,31 +36,49 @@ def main(args: RobotArguments):
             args.test_id,
             "--binary-path",
             args.binary_path,
+            "--html",
+            str(get_data_dir(args.test_id) / "report.html"),
         ]
     )
+    if args.close_app_after_tests:
+        from robot.app import App
+
+        async def close_app():
+            assert args.binary_path is not None
+            async with App() as app:
+                await app.find_by_path(Path(args.binary_path), timeout=5)
+                if app.state == AppState.Grabbed:
+                    logging.info("Closing app after tests.")
+                    app.close()
+
+        asyncio.run(close_app())
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(format="%(levelname)s %(message)s", level=logging.INFO)
+
     env = load_env_file()
-    parser = argparse.ArgumentParser(description="Run tests on Cynteract App.")
-    parser.add_argument(
+
+    argparser = argparse.ArgumentParser(description="Run tests on Cynteract App.")
+    argparser.add_argument(
         "--binary-path",
         type=str,
         required=env.get("BINARY_PATH") is None,
         default=env.get("BINARY_PATH"),
         help="Path to the Cynteract App binary.",
     )
-    parser.add_argument(
+    argparser.add_argument(
         "--test-id",
         type=str,
         required=False,
-        default="default",
+        default=RobotArguments(binary_path=None).test_id,
         help="Test ID for screenshots.",
     )
-    args = parser.parse_args()
+    args = argparser.parse_args()
+
     arguments = RobotArguments(
         binary_path=args.binary_path,
         test_id=args.test_id,
+        close_app_after_tests=False,
     )
     main(arguments)

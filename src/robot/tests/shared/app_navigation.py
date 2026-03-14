@@ -46,7 +46,7 @@ async def detect_current_page(app: App, timeout: float = 2) -> Pages:
             elif app.locate(img_dir / "home/assert_please_connect_label.png"):
                 return Pages.please_connect
         timer.check()
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.2)
     return Pages.unknown
 
 
@@ -91,6 +91,9 @@ async def transition(
     elif tr == (Pages.update, Pages._next):
         await click_image(app, img_dir / "startup/click_no.png")
         await left_click()
+        # next thing could be auto login
+        if timeout is None:
+            timeout = 10.0
     elif tr == (Pages.login, Pages._next):
         await click_image(app, img_dir / "login/click_login_link.png")
         await click_image(app, img_dir / "login/click_email.png")

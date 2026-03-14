@@ -3,12 +3,12 @@ from pathlib import Path
 from shared.utils import load_env_file
 
 
-def get_builds_download_dir() -> Path:
-    return Path.home() / "Documents" / "visual_testing" / "builds"
+def get_data_dir(test_id: str) -> Path:
+    return Path.home() / "Documents" / "visual_testing" / test_id
 
 
 def get_screenshot_dir(test_id: str) -> Path:
-    return Path.home() / "Documents" / "visual_testing" / "screenshots" / test_id
+    return get_data_dir(test_id) / "screenshots"
 
 
 def get_small_image_dir() -> Path:

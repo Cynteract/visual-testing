@@ -16,6 +16,9 @@
       "name": "Deploy robot",
       "type": "debugpy",
       "request": "launch",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
       "module": "setup",
       "args": ["robot"],
       "justMyCode": false

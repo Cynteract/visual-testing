@@ -8,8 +8,6 @@ from github_service.service import CommitTestStatus, format_commit_status_descri
 from robot.__main__ import RobotArguments
 from shared.utils import load_env_file
 
-logging.basicConfig(level=logging.INFO)
-
 
 async def main():
     env = load_env_file()
@@ -84,11 +82,13 @@ def skip_commit():
 
 
 if __name__ == "__main__":
-    # arguments --reset-commit
+    logging.basicConfig(format="%(levelname)s %(message)s", level=logging.INFO)
+
     argparser = argparse.ArgumentParser()
     argparser.add_argument("--reset-commit", action="store_true")
     argparser.add_argument("--skip-commit", action="store_true")
     args = argparser.parse_args()
+
     if args.reset_commit:
         reset_commit()
     elif args.skip_commit:
