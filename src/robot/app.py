@@ -313,7 +313,7 @@ class App:
             raise MultipleMatchesFoundException(
                 f"Too many ({len(xloc)}) matches found for image {small_image_path} with confidence {confidence}"
             )
-        # cluster matches with a pixel distance < 3
+        # cluster matches with a pixel distance < 4
         clustered_xloc: list[int] = []
         clustered_yloc: list[int] = []
         for x, y in zip(xloc, yloc):

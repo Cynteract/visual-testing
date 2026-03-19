@@ -11,6 +11,8 @@ from pathlib import Path
 import github
 import requests
 from github.Commit import Commit
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from visual_regression_tracker import (
     Client,
     ClientConfig,
@@ -104,6 +106,16 @@ class Service:
                 project.mainBranchName = "development"
                 self.vrt_client.update_project(project)
             self.vrt_client.set_project(project.id)
+        else:
+            logging.warning(f"VRT client not initialized:")
+            if not config.vrt_api_url:
+                logging.warning("- VRT API URL not provided")
+            if not config.vrt_api_key:
+                logging.warning("- VRT API Key not provided")
+            if not config.vrt_email:
+                logging.warning("- VRT Email not provided")
+            if not config.vrt_password:
+                logging.warning("- VRT Password not provided")
 
     async def execute_command(self, *args: str, **kwargs) -> str:
         logging.info(f"Execute command: {' '.join(args)}")
@@ -195,6 +207,30 @@ class Service:
         _, file_name_base, _ = version_info.split(",")
         return file_name_base, branch
 
+    async def download_file(self, url: str, file_path: Path) -> None:
+        """Download a file with retry logic on connection errors."""
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        session = requests.Session()
+        adapter = HTTPAdapter(
+            max_retries=Retry(
+                total=3,
+                backoff_factor=1,
+                status_forcelist=[429, 500, 502, 503, 504],
+                allowed_methods=["GET"],
+            )
+        )
+        session.mount("https://", adapter)
+        try:
+            response = session.get(url, stream=True, timeout=60)
+            response.raise_for_status()
+            with open(file_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=32768):
+                    if chunk:
+                        f.write(chunk)
+        except Exception as e:
+            file_path.unlink(missing_ok=True)
+            raise RuntimeError(f"Failed to download from {url}: {e}") from e
+
     async def run_commit_test(self, version: str, branch: str) -> TestResult:
         try:
             # run robot
@@ -232,12 +268,7 @@ class Service:
                 logging.info(f"Download build for version {version}.")
                 base_url = "https://storage.googleapis.com/cynteract-unity-auto-build"
                 download_url = f"{base_url}/windows/{zip_path.name}"
-                zip_path.parent.mkdir(parents=True, exist_ok=True)
-                response = requests.get(download_url, stream=True)
-                response.raise_for_status()
-                with open(zip_path, "wb") as f:
-                    for chunk in response.iter_content(chunk_size=32768):
-                        f.write(chunk)
+                await self.download_file(download_url, zip_path)
             logging.info(f"Extract build to {app_folder}/ .")
             with zipfile.ZipFile(zip_path, "r") as zip_ref:
                 zip_ref.extractall(app_folder)

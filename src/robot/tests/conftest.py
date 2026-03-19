@@ -7,7 +7,7 @@ import pytest
 import pytest_asyncio
 
 from robot.app import App
-from robot.config import get_data_dir, get_screenshot_dir
+from robot.config import get_data_dir
 from shared.utils import load_env_file
 
 env = load_env_file()
@@ -50,6 +50,7 @@ def pytest_runtest_makereport(item, call):
         logging.error(f"Test {item.name} failed!")
         # take screenshot of the whole screen for debugging
         test_id = item.funcargs.get("test_id")
-        screenshot_dir = get_screenshot_dir(test_id)
+        data_dir = get_data_dir(test_id)
+        data_dir.mkdir(parents=True, exist_ok=True)
         with PIL.ImageGrab.grab() as img:
-            img.save(screenshot_dir / f"ERROR.png")
+            img.save(data_dir / f"ERROR.png")

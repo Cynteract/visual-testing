@@ -28,7 +28,7 @@ def main(args: RobotArguments):
     assert args.binary_path is not None, "Binary path must be provided"
     # run pytest
     logging.info(f"Start robot with binary {args.binary_path} .")
-    pytest.main(
+    exit_code = pytest.main(
         [
             "-x",
             str(Path(__file__).parent / "tests"),
@@ -52,6 +52,9 @@ def main(args: RobotArguments):
                     app.close()
 
         asyncio.run(close_app())
+    if exit_code != 0:
+        exit_code_name = pytest.ExitCode(exit_code).name
+        raise RuntimeError(f"Tests failed with exit code {exit_code_name}.")
 
 
 if __name__ == "__main__":
@@ -71,7 +74,7 @@ if __name__ == "__main__":
         "--test-id",
         type=str,
         required=False,
-        default=RobotArguments(binary_path=None).test_id,
+        default=RobotArguments.test_id,
         help="Test ID for screenshots.",
     )
     args = argparser.parse_args()
