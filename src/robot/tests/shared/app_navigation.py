@@ -103,6 +103,8 @@ async def transition(
         await click_image(app, img_dir / "login/click_login_button.png")
         if timeout is None:
             timeout = 10.0
+    elif tr == (Pages.settings, Pages._next):
+        await click_image(app, img_dir / "settings/click_back.png")
     elif tr == (Pages.settings, Pages.login):
         await click_image(app, img_dir / "settings/click_logout.png")
     elif tr == (Pages.home, Pages.settings):
