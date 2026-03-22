@@ -1,4 +1,5 @@
 import asyncio
+import os
 from enum import Enum
 
 from robot.app import App
@@ -29,25 +30,29 @@ async def detect_current_page(app: App, timeout: float = 2) -> Pages:
         timeout,
         f"Current page not detected within {timeout} seconds",
     )
+    detected_page = None
     while True:
         with app.cached_screenshot():
-            if app.locate(img_dir / "startup/assert_intro.png", confidence=0.95):
-                return Pages.startup
+            if app.locate(img_dir / "startup/assert_intro.png", 0.9):
+                detected_page = Pages.startup
             elif app.locate(img_dir / "startup/assert_update_now.png"):
-                return Pages.update
+                detected_page = Pages.update
             elif app.locate(img_dir / "home/assert_stats_label.png"):
-                return Pages.home
+                detected_page = Pages.home
             elif app.locate(img_dir / "login/assert_login_title.png"):
-                return Pages.login
+                detected_page = Pages.login
             elif app.locate(img_dir / "settings/assert_title.png"):
-                return Pages.settings
+                detected_page = Pages.settings
             elif app.locate(img_dir / "introduction/assert_welcome_title.png"):
-                return Pages.introduction
+                detected_page = Pages.introduction
             elif app.locate(img_dir / "home/assert_please_connect_label.png"):
-                return Pages.please_connect
+                detected_page = Pages.please_connect
+        if detected_page is not None:
+            if os.environ.get("DEBUG"):
+                print(f"Detected page: {detected_page}")
+            return detected_page
         timer.check()
         await asyncio.sleep(0.2)
-    return Pages.unknown
 
 
 async def wait_for_page(app: App, page: Pages, timeout: float = 5):

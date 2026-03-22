@@ -1,4 +1,6 @@
+import logging
 import os
+import time
 
 
 def load_env_file() -> dict[str, str]:
@@ -11,3 +13,15 @@ def load_env_file() -> dict[str, str]:
                 env[key] = value
                 os.environ[key] = value
     return env
+
+
+class PrintDuration:
+    def __init__(self, message: str):
+        self.message = message
+
+    def __enter__(self):
+        self.start_time = time.time()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        duration = time.time() - self.start_time
+        logging.warning(f"{self.message} duration: {duration:.3f}s")

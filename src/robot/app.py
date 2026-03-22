@@ -37,7 +37,6 @@ class AppState(Enum):
 
 
 class App:
-
     pid: int | None = None
     window_matcher: WindowMatcher | None = None
     window: pywinctl.Window | None = None
@@ -47,7 +46,11 @@ class App:
     state: AppState = AppState.Uninitialized
     debug_dir: Path | None = None
 
-    cached_large_image: MatLike | None = None
+    @dataclass
+    class ImageCache:
+        gray_image: MatLike
+
+    cached_large_image: ImageCache | None = None
 
     async def __aenter__(self):
         return self
@@ -246,19 +249,28 @@ class App:
             client_frame.bottom,
         )
 
-    def _get_large_image(self) -> MatLike:
+    def _get_large_image(self) -> ImageCache:
         bbox = self._get_bounding_box()
         # load images, cv2 uses numpy arrays in BGR format
         # grabbing window only does not work on all windows, see https://github.com/python-pillow/Pillow/pull/8516#issuecomment-3794640267
         with PIL.ImageGrab.grab(bbox=bbox) as window_grab:
             if self.debug_dir is not None:
-                self.debug_dir.mkdir(parents=True, exist_ok=True)
+                image_grab_dir = self.debug_dir / "image_grab"
+                image_grab_dir.mkdir(parents=True, exist_ok=True)
                 timestamp = (
                     datetime.now().isoformat(timespec="milliseconds").replace(":", "-")
                 )
-                window_grab.save(self.debug_dir / f"screenshot_{timestamp}.png")
+                window_grab.save(image_grab_dir / f"screenshot_{timestamp}.png")
             window_image = numpy.array(window_grab)
-            return cv2.cvtColor(window_image, cv2.COLOR_RGB2BGR)
+            # convert to grayscale
+            gray_image = cv2.cvtColor(window_image, cv2.COLOR_RGB2GRAY)
+            return self.ImageCache(gray_image=gray_image)
+
+    def _get_small_image(self, path: Path) -> ImageCache:
+        image = cv2.imread(str(path))
+        assert image is not None, f"Could not load small image at {path}"
+        gray_image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+        return self.ImageCache(gray_image=gray_image)
 
     class _CachedScreenshot:
         def __init__(self, app: "App"):
@@ -274,6 +286,16 @@ class App:
     def cached_screenshot(self) -> _CachedScreenshot:
         return self._CachedScreenshot(self)
 
+    def _debug_save_images(
+        self,
+        target_dir: Path,
+        small_image: ImageCache,
+        large_image: ImageCache,
+    ):
+        target_dir.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(str(target_dir / f"small.png"), small_image.gray_image)
+        cv2.imwrite(str(target_dir / f"large.png"), large_image.gray_image)
+
     def locate(
         self, small_image_path: Path, confidence: float = 0.8
     ) -> tuple[int, int, int, int] | None:
@@ -283,6 +305,16 @@ class App:
         Returns: (x1, y1, x2, y2) of the found image on the screen or None
         """
         assert self.window, "App window is not available. Call open() first."
+        if self.debug_dir is not None:
+            timestamp = (
+                datetime.now().isoformat(timespec="milliseconds").replace(":", "-")
+            )
+            debug_save_dir = (
+                self.debug_dir / "matches" / f"{timestamp}_{small_image_path.stem}"
+            )
+        else:
+            debug_save_dir = None
+
         bbox = self._get_bounding_box()
 
         # enforce size before taking screenshot
@@ -293,19 +325,20 @@ class App:
             large_image = self.cached_large_image
         else:
             large_image = self._get_large_image()
-        small_image = cv2.imread(small_image_path)
+        small_image = self._get_small_image(small_image_path)
         assert (
-            small_image is not None
-        ), f"Could not load small image at {small_image_path}"
-        assert (
-            large_image.shape[0] >= small_image.shape[0]
+            large_image.gray_image.shape[0] >= small_image.gray_image.shape[0]
         ), "small image width exceeds the large image width"
         assert (
-            large_image.shape[1] >= small_image.shape[1]
+            large_image.gray_image.shape[1] >= small_image.gray_image.shape[1]
         ), "small image height exceeds the large image height"
+        if debug_save_dir is not None:
+            self._debug_save_images(debug_save_dir, small_image, large_image)
 
         # https://docs.opencv.org/4.13.0/d4/dc6/tutorial_py_template_matching.html
-        match = cv2.matchTemplate(large_image, small_image, cv2.TM_CCOEFF_NORMED)
+        match = cv2.matchTemplate(
+            large_image.gray_image, small_image.gray_image, cv2.TM_CCOEFF_NORMED
+        )
         yloc, xloc = numpy.where(match >= confidence)
         if len(xloc) == 0:
             return None
@@ -333,6 +366,6 @@ class App:
             return (
                 clustered_xloc[0] + bbox[0],
                 clustered_yloc[0] + bbox[1],
-                clustered_xloc[0] + bbox[0] + small_image.shape[1],
-                clustered_yloc[0] + bbox[1] + small_image.shape[0],
+                clustered_xloc[0] + bbox[0] + small_image.gray_image.shape[1],
+                clustered_yloc[0] + bbox[1] + small_image.gray_image.shape[0],
             )
