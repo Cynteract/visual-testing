@@ -4,7 +4,7 @@ import pynput
 
 from robot.app import App
 from robot.browser import get_browser_window_matcher
-from robot.config import get_small_image_dir
+from robot.config import get_frame_size, get_small_image_dir
 from robot.utils import assert_image, click_image, screenshot, type_key, type_text
 
 
@@ -14,7 +14,7 @@ async def login_with_browser_cookie_absent(username: str, password: str, test_id
 
     async with App() as browser:
         await browser.find_by_window(window_matcher)
-        browser.resize(800, 600)
+        browser.resize_client_frame(*get_frame_size())
         browser.enforce_size()
 
         await assert_image(browser, img_dir / "enter_email.png", timeout=5)

@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 from robot.app import App, AppState
-from robot.config import get_small_image_dir, password, username
+from robot.config import get_frame_size, get_small_image_dir, password, username
 from robot.reset import reset_app_state
 from robot.tests.shared.app_navigation import (
     Pages,
@@ -16,7 +16,6 @@ from robot.tests.shared.browser_actions import login_with_browser_cookie_absent
 from robot.timeout import Timeout
 from robot.utils import click_image, screenshot, type_text
 
-REGION = (0, 0, 800, 600)
 img_dir = get_small_image_dir()
 
 
@@ -34,7 +33,7 @@ async def test_first_start_login(binary_path, test_id):
         # reset and restart app for first start experience
         reset_app_state()
         await app.find_or_start_by_path(binary_path)
-        app.resize(800, 600)
+        app.resize_client_frame(*get_frame_size())
         app.enforce_size()
         await wait_for_page(app, Pages.update, timeout=15)
         await transition(app, Pages.update, Pages._next)

@@ -7,7 +7,7 @@ import pytest
 import pytest_asyncio
 
 from robot.app import App
-from robot.config import get_data_dir
+from robot.config import get_data_dir, get_frame_size
 from shared.utils import load_env_file
 
 env = load_env_file()
@@ -39,7 +39,7 @@ async def app(binary_path):
         if os.environ.get("DEBUG") is not None:
             app.debug_dir = get_data_dir(test_id="debug")
         await app.find_or_start_by_path(binary_path)
-        app.resize(800, 600)
+        app.resize_client_frame(*get_frame_size())
         app.enforce_size()
         yield app
 

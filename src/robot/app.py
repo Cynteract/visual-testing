@@ -41,7 +41,8 @@ class App:
     window_matcher: WindowMatcher | None = None
     window: pywinctl.Window | None = None
     enforce_size_task: asyncio.Task | None = None
-    requested_size: tuple[int, int] | None = None
+    requested_client_frame_size: tuple[int, int] | None = None
+    resize_offsets: tuple[int, int] = (0, 0)
     file_path: Path | None = None
     state: AppState = AppState.Uninitialized
     debug_dir: Path | None = None
@@ -157,13 +158,13 @@ class App:
                 timer.check()
                 await asyncio.sleep(0.5)
 
-    def resize(self, width, height):
+    def resize_client_frame(self, width, height):
         """
         Sets the size of the app window.
         """
         assert self.window, "App window is not available. Call open() first."
-        self.requested_size = (width, height)
-        self.window.resizeTo(width, height)
+        self.requested_client_frame_size = (width, height)
+        self._enforce_size_once()
 
     def close(self, timeout: float = 5):
         """
@@ -212,11 +213,40 @@ class App:
     def _enforce_size_once(self):
         assert self.window, "App window is not available. Call open() first."
         if self.window.isMinimized or self.window.isMaximized:
+            # set window to floating state
             self.window.restore()
-        if self.requested_size:
-            self.window.resizeTo(*self.requested_size)
+        if self.requested_client_frame_size:
+            # resize window
+            frame = self.window.getClientFrame()
+            frame_size = (frame.right - frame.left, frame.bottom - frame.top)
+            if self.requested_client_frame_size != frame_size:
+                self.window.resizeTo(
+                    self.requested_client_frame_size[0] + self.resize_offsets[0],
+                    self.requested_client_frame_size[1] + self.resize_offsets[1],
+                    wait=True,
+                )
+            self._update_resize_offsets()
         if self.window.position != (0, 0):
+            # place window at top left corner
             self.window.moveTo(0, 0)
+
+    def _update_resize_offsets(self) -> bool:
+        assert self.window and self.requested_client_frame_size
+        frame = self.window.getClientFrame()
+        frame_size = (frame.right - frame.left, frame.bottom - frame.top)
+        new_offsets = (
+            self.requested_client_frame_size[0]
+            - frame_size[0]
+            + self.resize_offsets[0],
+            self.requested_client_frame_size[1]
+            - frame_size[1]
+            + self.resize_offsets[1],
+        )
+        if new_offsets != self.resize_offsets:
+            logging.info(f"Update offsets from {self.resize_offsets} to {new_offsets}")
+            self.resize_offsets = new_offsets
+            return True
+        return False
 
     async def _enforce_size_routine(self):
         try:

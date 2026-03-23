@@ -10,7 +10,6 @@ from robot.tests.shared.app_navigation import (
 )
 from robot.utils import assert_image, click_image, screenshot, type_text
 
-REGION = (0, 0, 800, 600)
 img_dir = get_small_image_dir()
 
 

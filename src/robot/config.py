@@ -15,6 +15,13 @@ def get_small_image_dir() -> Path:
     return Path(__file__).parent / "tests" / "images"
 
 
+def get_frame_size() -> tuple[int, int]:
+    # Cynteract app allows aspect ratios between 4:3 and 21:9 for window size, not considering window decorations.
+    # Window decorations can vary between theme and screen scaling.
+    # We need some padding to the limiting aspect ratios to avoid the app's force rescaling.
+    return (850, 600)
+
+
 env = load_env_file()
 
 assert "ROBOT_USERNAME" in env, "ROBOT_USERNAME must be set in .env file"
