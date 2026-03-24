@@ -327,7 +327,7 @@ class App:
         cv2.imwrite(str(target_dir / f"large.png"), large_image.gray_image)
 
     def locate(
-        self, small_image_path: Path, confidence: float = 0.8
+        self, small_image_path: Path, confidence: float = 0.9
     ) -> tuple[int, int, int, int] | None:
         """
         Locates the given image on the app window screenshot. Returns the bounding box if found, otherwise None.
@@ -399,3 +399,18 @@ class App:
                 clustered_xloc[0] + bbox[0] + small_image.gray_image.shape[1],
                 clustered_yloc[0] + bbox[1] + small_image.gray_image.shape[0],
             )
+
+    def get_screen_scale(self) -> int:
+        """
+        Returns the screen scale factor of the app window. This is relevant for high-DPI displays where the actual pixel size of the window can be larger than the logical size.
+        """
+        assert self.window, "App window is not available. Call open() first."
+        # get the logical and physical size of the window to calculate the scale factor
+        screen_id = self.window.getDisplay()[0]
+        all_screens = pywinctl.getAllScreens()
+        screen = all_screens[screen_id]
+
+        assert (
+            screen["scale"][0] == screen["scale"][1]
+        ), "Non-uniform scaling is not supported"
+        return int(screen["scale"][0])

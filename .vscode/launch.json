@@ -40,6 +40,16 @@
       },
       "module": "robot",
       "justMyCode": false
+    },
+    {
+      "name": "retake_screenshots",
+      "type": "debugpy",
+      "request": "launch",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
+      "module": "development",
+      "justMyCode": false
     }
   ]
 }

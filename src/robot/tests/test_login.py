@@ -36,7 +36,8 @@ async def test_first_start_login(binary_path, test_id):
         app.resize_client_frame(*get_frame_size())
         app.enforce_size()
         await wait_for_page(app, Pages.update, timeout=15)
-        await transition(app, Pages.update, Pages._next)
+        # the browser might cover the Cynteract window
+        await transition(app, Pages.update, Pages._next, wait_for_next_page=False)
 
         # browser login
         await login_with_browser_cookie_absent(username, password, test_id)

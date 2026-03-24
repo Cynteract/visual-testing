@@ -33,7 +33,7 @@ async def detect_current_page(app: App, timeout: float = 2) -> Pages:
     detected_page = None
     while True:
         with app.cached_screenshot():
-            if app.locate(img_dir / "startup/assert_intro.png", 0.9):
+            if app.locate(img_dir / "startup/assert_intro.png", 0.95):
                 detected_page = Pages.startup
             elif app.locate(img_dir / "startup/assert_update_now.png"):
                 detected_page = Pages.update
@@ -88,7 +88,11 @@ async def go_to_page(app: App, target: Pages):
 
 
 async def transition(
-    app, current: Pages, target: Pages, timeout: float | None = None
+    app,
+    current: Pages,
+    target: Pages,
+    wait_for_next_page: bool = True,
+    timeout: float | None = None,
 ) -> Pages:
     tr = (current, target)
     if tr == (Pages.startup, Pages._next):
@@ -117,7 +121,7 @@ async def transition(
     elif tr == (Pages.home, Pages.game_center):
         await click_image(app, img_dir / "home/click_game_center.png")
     elif tr == (Pages.please_connect, Pages._next):
-        await click_image(app, img_dir / "click_back.png")
+        await click_image(app, img_dir / "home/click_back.png")
         # need to click twice because of a bug
         await left_click()
     else:
@@ -125,6 +129,9 @@ async def transition(
 
     if timeout is None:
         timeout = 4.0
+
+    if not wait_for_next_page:
+        return current
 
     timer = Timeout(
         timeout,
