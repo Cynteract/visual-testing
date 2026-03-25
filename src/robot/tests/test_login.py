@@ -33,7 +33,7 @@ async def test_first_start_login(binary_path, test_id):
         # reset and restart app for first start experience
         reset_app_state()
         await app.find_or_start_by_path(binary_path)
-        app.resize_client_frame(*get_frame_size())
+        await app.resize_client_frame(*get_frame_size())
         app.enforce_size()
         await wait_for_page(app, Pages.update, timeout=15)
         # the browser might cover the Cynteract window

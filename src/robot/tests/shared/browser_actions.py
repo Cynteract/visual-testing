@@ -26,7 +26,7 @@ async def login_with_browser_cookie_absent(username: str, password: str, test_id
             img_dir = get_small_image_dir() / "browser" / "150"
         else:
             raise ValueError(f"Unsupported screen scale: {scale}%")
-        browser.resize_client_frame(*frame_size)
+        await browser.resize_client_frame(*frame_size)
         browser.enforce_size()
 
         await assert_image(browser, img_dir / "enter_email.png", timeout=5)

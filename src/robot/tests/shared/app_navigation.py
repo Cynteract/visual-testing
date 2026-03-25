@@ -33,19 +33,19 @@ async def detect_current_page(app: App, timeout: float = 2) -> Pages:
     detected_page = None
     while True:
         with app.cached_screenshot():
-            if app.locate(img_dir / "startup/assert_intro.png", 0.95):
+            if await app.locate(img_dir / "startup/assert_intro.png", 0.95):
                 detected_page = Pages.startup
-            elif app.locate(img_dir / "startup/assert_update_now.png"):
+            elif await app.locate(img_dir / "startup/assert_update_now.png"):
                 detected_page = Pages.update
-            elif app.locate(img_dir / "home/assert_stats_label.png"):
+            elif await app.locate(img_dir / "home/assert_stats_label.png"):
                 detected_page = Pages.home
-            elif app.locate(img_dir / "login/assert_login_title.png"):
+            elif await app.locate(img_dir / "login/assert_login_title.png"):
                 detected_page = Pages.login
-            elif app.locate(img_dir / "settings/assert_title.png"):
+            elif await app.locate(img_dir / "settings/assert_title.png"):
                 detected_page = Pages.settings
-            elif app.locate(img_dir / "introduction/assert_welcome_title.png"):
+            elif await app.locate(img_dir / "introduction/assert_welcome_title.png"):
                 detected_page = Pages.introduction
-            elif app.locate(img_dir / "home/assert_please_connect_label.png"):
+            elif await app.locate(img_dir / "home/assert_please_connect_label.png"):
                 detected_page = Pages.please_connect
         if detected_page is not None:
             if os.environ.get("DEBUG"):

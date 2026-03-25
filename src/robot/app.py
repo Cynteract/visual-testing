@@ -42,7 +42,7 @@ class App:
     window: pywinctl.Window | None = None
     enforce_size_task: asyncio.Task | None = None
     requested_client_frame_size: tuple[int, int] | None = None
-    resize_offsets: tuple[int, int] = (0, 0)
+    resize_offsets: tuple[int, int] | None = None
     file_path: Path | None = None
     state: AppState = AppState.Uninitialized
     debug_dir: Path | None = None
@@ -158,13 +158,13 @@ class App:
                 timer.check()
                 await asyncio.sleep(0.5)
 
-    def resize_client_frame(self, width, height):
+    async def resize_client_frame(self, width, height):
         """
         Sets the size of the app window.
         """
         assert self.window, "App window is not available. Call open() first."
         self.requested_client_frame_size = (width, height)
-        self._enforce_size_once()
+        await self._enforce_size_once()
 
     def close(self, timeout: float = 5):
         """
@@ -185,7 +185,7 @@ class App:
         if wait:
             for _ in range(5):
                 if not process.is_running():
-                    return
+                    break
                 time.sleep(1)
 
         # force terminate if still running
@@ -201,6 +201,7 @@ class App:
 
         self.state = AppState.Closed
         self.pid = None
+        self.window = None
 
     def enforce_size(self):
         """
@@ -210,49 +211,47 @@ class App:
         if not self.enforce_size_task:
             self.enforce_size_task = asyncio.create_task(self._enforce_size_routine())
 
-    def _enforce_size_once(self):
+    async def _enforce_size_once(self):
         assert self.window, "App window is not available. Call open() first."
         if self.window.isMinimized or self.window.isMaximized:
             # set window to floating state
-            self.window.restore()
+            restoreOk = self.window.restore(wait=True)
+            assert restoreOk, "Failed to restore the app window to enforce size"
         if self.requested_client_frame_size:
             # resize window
+            if self.resize_offsets is None:
+                self.resize_offsets = self._calculate_resize_offsets()
             frame = self.window.getClientFrame()
             frame_size = (frame.right - frame.left, frame.bottom - frame.top)
             if self.requested_client_frame_size != frame_size:
-                self.window.resizeTo(
+                resizeOk = self.window.resizeTo(
                     self.requested_client_frame_size[0] + self.resize_offsets[0],
                     self.requested_client_frame_size[1] + self.resize_offsets[1],
                     wait=True,
                 )
-            self._update_resize_offsets()
+                assert resizeOk, "Failed to resize the app window to enforce size"
         if self.window.position != (0, 0):
             # place window at top left corner
-            self.window.moveTo(0, 0)
+            self.window.moveTo(0, 0, wait=True)
 
-    def _update_resize_offsets(self) -> bool:
+    def _calculate_resize_offsets(self) -> tuple[int, int]:
+        """Resize window to fixed size and get resulting bounding box to calculate the offsets."""
         assert self.window and self.requested_client_frame_size
+        assert (
+            not self.window.isMinimized and not self.window.isMaximized
+        ), "Window must be in floating state to calculate resize offsets"
         frame = self.window.getClientFrame()
         frame_size = (frame.right - frame.left, frame.bottom - frame.top)
-        new_offsets = (
-            self.requested_client_frame_size[0]
-            - frame_size[0]
-            + self.resize_offsets[0],
-            self.requested_client_frame_size[1]
-            - frame_size[1]
-            + self.resize_offsets[1],
-        )
-        if new_offsets != self.resize_offsets:
-            logging.info(f"Update offsets from {self.resize_offsets} to {new_offsets}")
-            self.resize_offsets = new_offsets
-            return True
-        return False
+        rect = self.window.rect
+        rect_size = (rect.right - rect.left, rect.bottom - rect.top)
+        offsets = (rect_size[0] - frame_size[0], rect_size[1] - frame_size[1])
+        return offsets
 
     async def _enforce_size_routine(self):
         try:
             while True:
                 if self.window:
-                    self._enforce_size_once()
+                    await self._enforce_size_once()
                 await asyncio.sleep(0.5)
         except asyncio.CancelledError:
             pass
@@ -326,7 +325,7 @@ class App:
         cv2.imwrite(str(target_dir / f"small.png"), small_image.gray_image)
         cv2.imwrite(str(target_dir / f"large.png"), large_image.gray_image)
 
-    def locate(
+    async def locate(
         self, small_image_path: Path, confidence: float = 0.9
     ) -> tuple[int, int, int, int] | None:
         """
@@ -349,7 +348,7 @@ class App:
 
         # enforce size before taking screenshot
         if self.enforce_size_task != None and self.window.isMaximized:
-            self._enforce_size_once()
+            await self._enforce_size_once()
 
         if self.cached_large_image is not None:
             large_image = self.cached_large_image

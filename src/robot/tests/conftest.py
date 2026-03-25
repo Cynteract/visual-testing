@@ -39,7 +39,7 @@ async def app(binary_path):
         if os.environ.get("DEBUG") is not None:
             app.debug_dir = get_data_dir(test_id="debug")
         await app.find_or_start_by_path(binary_path)
-        app.resize_client_frame(*get_frame_size())
+        await app.resize_client_frame(*get_frame_size())
         app.enforce_size()
         yield app
 

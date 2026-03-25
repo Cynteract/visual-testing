@@ -42,7 +42,7 @@ async def click_image(app: App, image_path: Path, timeout: int = 5):
         f"Image {image_path} not found on screen within {timeout} seconds",
     )
     while True:
-        bbox_or_null = app.locate(image_path)
+        bbox_or_null = await app.locate(image_path)
         if bbox_or_null:
             await tween_mouse_to(
                 (
@@ -71,7 +71,7 @@ async def assert_any_image(
     )
     while True:
         for image_path in image_paths:
-            bbox_or_null = app.locate(image_path)
+            bbox_or_null = await app.locate(image_path)
             if bbox_or_null:
                 return
         timer.check()
@@ -84,7 +84,7 @@ async def assert_image(app: App, image_path: Path, timeout: float = 5.0) -> None
         f"Image {image_path} not found on screen within {timeout} seconds",
     )
     while True:
-        bbox_or_null = app.locate(image_path)
+        bbox_or_null = await app.locate(image_path)
         if bbox_or_null:
             return
         timer.check()
