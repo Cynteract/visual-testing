@@ -36,13 +36,16 @@ async def type_key(key: pynput.keyboard.Key):
     keyboard.release(key)
 
 
-async def click_image(app: App, image_path: Path, timeout: int = 5):
+async def click_image(
+    app: App, image_path: Path, timeout: int = 5, confidence: float | None = None
+):
+    """Clicks the center of the given image on the screen, waiting until it appears if necessary."""
     timer = Timeout(
         timeout,
         f"Image {image_path} not found on screen within {timeout} seconds",
     )
     while True:
-        bbox_or_null = await app.locate(image_path)
+        bbox_or_null = await app.locate(image_path, confidence=confidence)
         if bbox_or_null:
             await tween_mouse_to(
                 (

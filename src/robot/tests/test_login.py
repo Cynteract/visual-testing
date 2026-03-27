@@ -1,54 +1,40 @@
 import asyncio
+from pathlib import Path
 
-import pytest
-
-from robot.app import App, AppState
+from robot.app import App
 from robot.config import get_frame_size, get_small_image_dir, password, username
 from robot.reset import reset_app_state
-from robot.tests.shared.app_navigation import (
-    Pages,
-    detect_current_page,
-    go_to_page,
-    transition,
-    wait_for_page,
-)
+from robot.tests.shared.app_navigation import Navigation
 from robot.tests.shared.browser_actions import login_with_browser_cookie_absent
+from robot.tests.shared.pages import Pages
 from robot.timeout import Timeout
 from robot.utils import click_image, screenshot, type_text
 
 img_dir = get_small_image_dir()
 
 
-@pytest.mark.asyncio
-async def test_first_start_login(binary_path, test_id):
-    async with App() as app:
-        # close app if it is already running from previous test
-        try:
-            await app.find_by_path(binary_path, timeout=0.2)
-        except TimeoutError:
-            pass
-        if app.state == AppState.Grabbed:
-            app.close()
+async def test_first_start_login(
+    app: App, binary_path: Path, navigation: Navigation, test_id
+):
+    app.close()
+    # reset and restart app for first start experience
+    reset_app_state()
+    await app.find_or_start_by_path(binary_path)
+    await app.resize_client_frame(*get_frame_size())
+    app.enforce_size()
+    await navigation.wait_for_page(Pages.update, timeout=15)
+    # the browser might cover the Cynteract window
+    await navigation.trigger_transition(Pages.login)
 
-        # reset and restart app for first start experience
-        reset_app_state()
-        await app.find_or_start_by_path(binary_path)
-        await app.resize_client_frame(*get_frame_size())
-        app.enforce_size()
-        await wait_for_page(app, Pages.update, timeout=15)
-        # the browser might cover the Cynteract window
-        await transition(app, Pages.update, Pages._next, wait_for_next_page=False)
+    # browser login
+    await login_with_browser_cookie_absent(username, password, test_id)
 
-        # browser login
-        await login_with_browser_cookie_absent(username, password, test_id)
-
-        # assert logged in
-        await _assert_logged_in(app, timeout=20)
+    # assert logged in
+    await _assert_logged_in(app, navigation, timeout=20)
 
 
-@pytest.mark.asyncio
-async def test_email_password_login(app, test_id):
-    await go_to_page(app, Pages.login)
+async def test_email_password_login(app, navigation: Navigation, test_id):
+    await navigation.go_to_page(Pages.login)
 
     # login
     await click_image(app, img_dir / "login/click_login_link.png")
@@ -60,15 +46,15 @@ async def test_email_password_login(app, test_id):
     await click_image(app, img_dir / "login/click_login_button.png")
 
     # assert logged in
-    await _assert_logged_in(app, timeout=10)
+    await _assert_logged_in(app, navigation, timeout=10)
 
 
-async def _assert_logged_in(app: App, timeout: float):
+async def _assert_logged_in(app: App, navigation: Navigation, timeout: float):
     timer = Timeout(timeout, "Failed to log in within {timeout} seconds")
     while True:
         timer.check()
         try:
-            current_page = await detect_current_page(app)
+            current_page = await navigation.detect_current_page()
         except TimeoutError:
             continue
         if current_page == Pages.home or current_page == Pages.introduction:

@@ -216,6 +216,9 @@ class App:
         if self.window.isMinimized or self.window.isMaximized:
             # set window to floating state
             restoreOk = self.window.restore(wait=True)
+            # try twice
+            if not restoreOk:
+                restoreOk = self.window.restore(wait=True)
             assert restoreOk, "Failed to restore the app window to enforce size"
         if self.requested_client_frame_size:
             # resize window
@@ -326,7 +329,7 @@ class App:
         cv2.imwrite(str(target_dir / f"large.png"), large_image.gray_image)
 
     async def locate(
-        self, small_image_path: Path, confidence: float = 0.9
+        self, small_image_path: Path, confidence: float | None = 0.9
     ) -> tuple[int, int, int, int] | None:
         """
         Locates the given image on the app window screenshot. Returns the bounding box if found, otherwise None.
@@ -334,6 +337,8 @@ class App:
         Returns: (x1, y1, x2, y2) of the found image on the screen or None
         """
         assert self.window, "App window is not available. Call open() first."
+        if confidence is None:
+            confidence = 0.9
         if self.debug_dir is not None:
             timestamp = (
                 datetime.now().isoformat(timespec="milliseconds").replace(":", "-")

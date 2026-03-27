@@ -1,2 +1,6 @@
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+asyncio_mode = "auto"
+
+[tool.isort]
+profile = "black"
