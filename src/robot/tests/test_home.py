@@ -1,8 +1,8 @@
 from robot.app import App
 from robot.config import get_small_image_dir
+from robot.navigation import Navigation
+from robot.pages import Pages
 from robot.reset import reset_player_data
-from robot.tests.shared.app_navigation import Navigation
-from robot.tests.shared.pages import Pages
 from robot.utils import assert_image, click_image, screenshot, type_text
 
 img_dir = get_small_image_dir()

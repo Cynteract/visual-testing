@@ -1,11 +1,12 @@
 from dataclasses import dataclass
 from typing import Callable
 
-from robot.device_emulator import DeviceTypes
-from robot.tests.shared.pages import Pages, PageTags
-from robot.tests.shared.ui_state import DefinedUIState as DS
-from robot.tests.shared.ui_state import Games
-from robot.tests.shared.ui_state import UIState as S
+from robot.device_types import DeviceTypes
+from robot.pages import Pages, PageTags
+from robot.states import DefinedUIState as DS
+from robot.states import Games
+from robot.states import UIState as S
+from robot.states import expand_states
 from shared.utils import PrintDuration
 
 
@@ -53,7 +54,7 @@ def _leave_game(transition: "DefinedTransition") -> bool:
 
 @dataclass
 class _Transition:
-    """Partially defined transition, will be expanded before use"""
+    """Partially defined transition, will be expanded before use. Partial definitions are easier to write and read."""
 
     old: S
     new: S
@@ -122,63 +123,6 @@ class DefinedTransition:
             return self.old.page == old and self.new.page in new
         else:
             raise ValueError(f"Invalid types for matching: {type(old)}, {type(new)}")
-
-
-def expand_states(states: list[S]) -> list[DS]:
-    # expand page
-    new_states: list[S] = []
-    for state in states:
-        if isinstance(state.page, Pages):
-            new_states.append(state)
-        elif isinstance(state.page, PageTags):
-            for page in Pages:
-                if page.has(state.page):
-                    new_states.append(state.with_(page=page))
-        else:
-            for page in Pages:
-                new_states.append(state.with_(page=page))
-    states = new_states
-
-    # expand game
-    new_states = []
-    for state in states:
-        if state.game is not None:
-            new_states.append(state)
-        else:
-            for game in Games:
-                new_states.append(state.with_(game=game))
-    states = new_states
-
-    # expand device
-    new_states = []
-    for state in states:
-        if state.device is not None:
-            new_states.append(state)
-        else:
-            for device_type in DeviceTypes:
-                new_states.append(state.with_(device=device_type))
-    states = new_states
-
-    # convert type
-    new_defined_states: list[DS] = []
-    for state in states:
-        assert (
-            isinstance(state.page, Pages)
-            and isinstance(state.game, Games)
-            and isinstance(state.device, DeviceTypes)
-        )
-        new_defined_states.append(
-            DS(
-                page=state.page,
-                game=state.game,
-                device=state.device,
-            )
-        )
-
-    # filter invalid states
-    new_defined_states = [state for state in new_defined_states if DS.is_valid(state)]
-
-    return new_defined_states
 
 
 def expand_transitions(

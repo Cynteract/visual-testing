@@ -1,46 +1,53 @@
 import asyncio
-from enum import Enum
-from typing import Callable
 
 from pynput.keyboard import Controller
 
-
-class DeviceTypes(Enum):
-    not_connected = "not_connected"
-    strap = "strap"
+from robot.device_types import DeviceTypes
+from robot.state_machine import UIStateMachine
+from robot.states import UIState
+from robot.transitions import DefinedTransition
 
 
 class DeviceEmulator:
     def __init__(
         self,
         keyboard: Controller,
-        on_device_change: Callable[[DeviceTypes], None],
+        state_machine: UIStateMachine,
     ):
         self.keyboard: Controller = keyboard
         self.device_type: DeviceTypes | None = None
         self.rotation: int = 0
-        self.on_device_change = on_device_change
+        self.state_machine = state_machine
+        state_machine.register_transition_actions(self.device_actions)
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.device_type is not None:
+            # the page might change after the disconnect
+            await self.state_machine.go_towards(UIState(DeviceTypes.not_connected))
 
     async def connect(self, device_name: str):
         await self._type_text("_$" + device_name)
         self.device_type = DeviceTypes.strap
         self.rotation = 0
-        self.on_device_change(self.device_type)
+        self.state_machine.update_device(self.device_type)
 
     async def disconnect(self):
         await self._type_text("_$disconnect")
         self.device_type = DeviceTypes.not_connected
         self.rotation = 0
-        self.on_device_change(self.device_type)
+        self.state_machine.update_device(self.device_type)
 
     async def turn_left(self):
         while self.rotation >= 0:
-            await self._type_text("_$rxn")
+            await self._type_text("_$rxp")
             self.rotation -= 1
 
     async def turn_far_left(self):
         while self.rotation >= -1:
-            await self._type_text("_$rxn")
+            await self._type_text("_$rxp")
             self.rotation -= 1
 
     async def turn_right(self):
@@ -59,3 +66,17 @@ class DeviceEmulator:
             self.keyboard.press(char)
             self.keyboard.release(char)
             await asyncio.sleep(interval)
+
+    async def device_actions(
+        self,
+        transition: DefinedTransition,
+        wait_for_completion: bool = True,
+        timeout: float | None = None,
+    ) -> bool:
+        if transition.matches(DeviceTypes.not_connected, DeviceTypes.strap):
+            await self.connect("strap")
+        elif transition.matches(DeviceTypes.strap, DeviceTypes.not_connected):
+            await self.disconnect()
+        else:
+            return False
+        return True

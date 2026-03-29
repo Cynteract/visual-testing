@@ -1,14 +1,14 @@
 import asyncio
 import os
-from collections.abc import Callable
 
 from robot.app import App
 from robot.config import get_small_image_dir, password, username
-from robot.device_emulator import DeviceEmulator, DeviceTypes
-from robot.tests.shared.pages import Pages, PageTags
-from robot.tests.shared.transitions import DefinedTransition
-from robot.tests.shared.ui_state import DefinedUIState, Games, UIState
+from robot.device_emulator import DeviceEmulator
+from robot.pages import Pages, PageTags
+from robot.state_machine import UIStateMachine
+from robot.states import Games, UIState
 from robot.timeout import Timeout
+from robot.transitions import DefinedTransition
 from robot.utils import click_image, left_click, type_text
 
 
@@ -19,17 +19,13 @@ class Navigation:
         self,
         app: App,
         device_emulator: DeviceEmulator,
-        on_page_change: Callable[[Pages], None],
-        on_game_start: Callable[[Games], None],
-        get_next_transition: Callable[[UIState], DefinedTransition],
-        has_state_changed: Callable[[DefinedUIState], bool],
+        state_machine: UIStateMachine,
     ):
         self.app = app
         self.device_emulator = device_emulator
-        self.on_page_change = on_page_change
-        self.on_game_start = on_game_start
-        self.get_next_transition = get_next_transition
-        self.has_state_changed = has_state_changed
+        self.state_machine = state_machine
+        self.pending_game: Games | None = None
+        state_machine.register_transition_actions(self.page_actions)
 
     async def locate(
         self, relative_image_path: str, confidence: float | None = None
@@ -82,7 +78,12 @@ class Navigation:
             if detected_page is not None:
                 if os.environ.get("DEBUG"):
                     print(f"Detected page: {detected_page}")
-                self.on_page_change(detected_page)
+                self.state_machine.update_page(detected_page)
+                if detected_page.has(PageTags.game) and self.pending_game is not None:
+                    self.state_machine.udpate_game(self.pending_game)
+                    self.pending_game = None
+                if not detected_page.has(PageTags.game):
+                    self.state_machine.udpate_game(Games.no_game)
                 return detected_page
             timer.check()
             await asyncio.sleep(0.2)
@@ -103,23 +104,23 @@ class Navigation:
             await asyncio.sleep(0.5)
 
     async def go_to_page(self, target: Pages) -> None:
-        current = await self.detect_current_page()
-        while current != target:
-            transition = self.get_next_transition(UIState(target))
-            current = await self.fire_transition(transition)
+        await self.detect_current_page()
+        current_page = self.state_machine.state.page
+        while current_page != target:
+            new = await self.state_machine.go_towards(UIState(target))
+            current_page = new.page
 
     async def trigger_transition(self, target: Pages) -> None:
         """Trigger transition to other page without waiting for it to complete."""
-        current = await self.detect_current_page()
-        transition = self.get_next_transition(UIState(target))
-        await self.fire_transition(transition, wait_for_transition=False)
+        await self.detect_current_page()
+        await self.state_machine.trigger_towards(UIState(target))
 
-    async def fire_transition(
+    async def page_actions(
         self,
         transition: DefinedTransition,
-        wait_for_transition: bool = True,
+        wait_for_completion: bool = True,
         timeout: float | None = None,
-    ) -> Pages:
+    ) -> bool:
         if transition.matches(Pages.startup, Pages.update):
             await self.wait_for_page(Pages.update, timeout=5)
         elif transition.matches(Pages.update, Pages.login):
@@ -147,15 +148,13 @@ class Navigation:
             await self.click_image("home/click_game_center.png")
         elif transition.matches(Pages.please_connect, Pages.home):
             await self.click_image("home/click_back.png")
-        elif transition.matches(Pages.please_connect, DeviceTypes.strap):
-            await self.device_emulator.connect("strap")
         elif transition.matches(Pages.position_selection, Pages.game_center):
             await self.click_image("position_selection/click_head.png", 0.95)
         elif transition.matches(Pages.movement_selection, Pages.calibrate):
             await self.click_image("movement_selection/click_head_down.png", 0.95)
         elif transition.matches(Pages.game_center, Pages.movement_selection):
             await self.click_image("sphere_runner/click_preview.png", 0.95)
-            self.on_game_start(Games.sphere_runner)
+            self.pending_game = Games.sphere_runner
         elif transition.matches(Pages.calibrate, Pages.gameplay):
             await self.device_emulator.turn_left()
             await self.click_image("calibrate/click_confirm.png", 0.7)
@@ -169,25 +168,20 @@ class Navigation:
             await self.click_image("game/click_feedback_confirm.png")
         elif transition.matches(PageTags.device_connected, Pages.please_connect):
             await self.device_emulator.disconnect()
-        elif transition.matches(DeviceTypes.not_connected, DeviceTypes.strap):
-            await self.device_emulator.connect("strap")
-        elif transition.matches(DeviceTypes.strap, DeviceTypes.not_connected):
-            await self.device_emulator.disconnect()
         else:
-            raise Exception(f"No action defined for {transition}")
+            return False
 
         if timeout is None:
             timeout = 4.0
 
-        new_page = transition.old.page
-        if not wait_for_transition:
-            return new_page
+        if not wait_for_completion:
+            return True
 
         timer = Timeout(
             timeout,
             f"Failed to fire {transition} within {timeout} seconds",
         )
-        while not self.has_state_changed(transition.old):
+        while self.state_machine.state.page == transition.old.page:
             timer.check()
-            new_page = await self.detect_current_page()
-        return new_page
+            await self.detect_current_page()
+        return True

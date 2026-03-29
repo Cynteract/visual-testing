@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from robot.device_emulator import DeviceTypes
-from robot.tests.shared.pages import Pages, PageTags
+from robot.pages import Pages, PageTags
 
 
 class Games(Enum):
@@ -27,6 +27,8 @@ class UIState:
                 state.page = arg
             elif isinstance(arg, DeviceTypes):
                 state.device = arg
+            elif isinstance(arg, Games):
+                state.game = arg
             else:
                 raise ValueError(f"Invalid argument type: {type(arg)}")
 
@@ -36,6 +38,27 @@ class UIState:
         new_state.game = kwargs.get("game", self.game)
         new_state.device = kwargs.get("device", self.device)
         return new_state
+
+    def matches(self, other: "DefinedUIState") -> bool:
+        if isinstance(self.page, Pages) and self.page != other.page:
+            return False
+        if isinstance(self.page, PageTags) and not other.page.has(self.page):
+            return False
+        if isinstance(self.game, Games) and self.game != other.game:
+            return False
+        if isinstance(self.device, DeviceTypes) and self.device != other.device:
+            return False
+        return True
+
+    def __str__(self) -> str:
+        result = "S"
+        if self.page is not None:
+            result += f"_P_{self.page.name}"
+        if self.device is not None:
+            result += f"_D_{self.device.name}"
+        if self.game is not None:
+            result += f"_G_{self.game.name}"
+        return result
 
 
 _valid_states: list["DefinedUIState"] = []
@@ -54,6 +77,9 @@ class DefinedUIState:
             device=kwargs.get("device", self.device),
         )
         return new_state
+
+    def __str__(self) -> str:
+        return str(UIState(self.page, self.device, self.game))
 
     @staticmethod
     def is_valid(state: "DefinedUIState") -> bool:
@@ -94,34 +120,60 @@ for page in Pages:
                 _valid_states.append(state)
 
 
-class UIStateTracker:
-    def __init__(self, initial_state: DefinedUIState):
-        self.state = initial_state
-        self.pending_game_start: Games | None = None
+def expand_states(states: list[UIState]) -> list[DefinedUIState]:
+    # expand page
+    new_states: list[UIState] = []
+    for state in states:
+        if isinstance(state.page, Pages):
+            new_states.append(state)
+        elif isinstance(state.page, PageTags):
+            for page in Pages:
+                if page.has(state.page):
+                    new_states.append(state.with_(page=page))
+        else:
+            for page in Pages:
+                new_states.append(state.with_(page=page))
+    states = new_states
 
-    def update_device(self, new_device: DeviceTypes):
-        self.state = self.state.with_(device=new_device)
-        if not DefinedUIState.is_valid(self.state):
-            raise ValueError(f"Invalid state after device update: {self.state}")
+    # expand game
+    new_states = []
+    for state in states:
+        if state.game is not None:
+            new_states.append(state)
+        else:
+            for game in Games:
+                new_states.append(state.with_(game=game))
+    states = new_states
 
-    def update_page(self, new_page: Pages):
-        if self.state.page == new_page:
-            return
+    # expand device
+    new_states = []
+    for state in states:
+        if state.device is not None:
+            new_states.append(state)
+        else:
+            for device_type in DeviceTypes:
+                new_states.append(state.with_(device=device_type))
+    states = new_states
 
-        # update game based on page change
-        if self.pending_game_start is not None:
-            if new_page.has(PageTags.game):
-                self.state = self.state.with_(game=self.pending_game_start)
-            self.pending_game_start = None
-        if self.state.game != Games.no_game and not new_page.has(PageTags.game):
-            self.state = self.state.with_(game=Games.no_game)
+    # convert type
+    new_defined_states: list[DefinedUIState] = []
+    for state in states:
+        assert (
+            isinstance(state.page, Pages)
+            and isinstance(state.game, Games)
+            and isinstance(state.device, DeviceTypes)
+        )
+        new_defined_states.append(
+            DefinedUIState(
+                page=state.page,
+                game=state.game,
+                device=state.device,
+            )
+        )
 
-        self.state = self.state.with_(page=new_page)
-        if not DefinedUIState.is_valid(self.state):
-            raise ValueError(f"Invalid state after page update: {self.state}")
+    # filter invalid states
+    new_defined_states = [
+        state for state in new_defined_states if DefinedUIState.is_valid(state)
+    ]
 
-    def start_game(self, new_game: Games):
-        self.pending_game_start = new_game
-
-    def has_state_changed(self, old_state: DefinedUIState) -> bool:
-        return self.state != old_state
+    return new_defined_states

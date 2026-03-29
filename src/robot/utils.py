@@ -81,13 +81,15 @@ async def assert_any_image(
         await asyncio.sleep(0.5)
 
 
-async def assert_image(app: App, image_path: Path, timeout: float = 5.0) -> None:
+async def assert_image(
+    app: App, image_path: Path, timeout: float = 5.0, confidence: float | None = None
+) -> None:
     timer = Timeout(
         timeout,
         f"Image {image_path} not found on screen within {timeout} seconds",
     )
     while True:
-        bbox_or_null = await app.locate(image_path)
+        bbox_or_null = await app.locate(image_path, confidence=confidence)
         if bbox_or_null:
             return
         timer.check()

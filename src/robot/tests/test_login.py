@@ -3,10 +3,10 @@ from pathlib import Path
 
 from robot.app import App
 from robot.config import get_frame_size, get_small_image_dir, password, username
+from robot.navigation import Navigation
+from robot.pages import Pages
 from robot.reset import reset_app_state
-from robot.tests.shared.app_navigation import Navigation
 from robot.tests.shared.browser_actions import login_with_browser_cookie_absent
-from robot.tests.shared.pages import Pages
 from robot.timeout import Timeout
 from robot.utils import click_image, screenshot, type_text
 
