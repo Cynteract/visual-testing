@@ -33,6 +33,7 @@ async def main():
         github_pat=env["GITHUB_PAT"],
         robot_args=robot_args,
         single_run_commit=env.get("SINGLE_RUN_COMMIT"),
+        single_run_force_robot=env.get("SINGLE_RUN_FORCE_ROBOT"),
         vrt_api_url=env.get("VRT_API_URL"),
         vrt_api_key=env.get("VRT_ADMIN_API_KEY"),
         vrt_frontend_url=env.get("VRT_FRONTEND_URL"),

@@ -31,6 +31,7 @@ class GithubServiceConfig:
     github_pat: str
     robot_args: RobotArguments
     single_run_commit: str | None = None
+    single_run_force_robot: str | None = None
     vrt_api_url: str | None = None
     vrt_api_key: str | None = None
     vrt_frontend_url: str | None = None
@@ -275,7 +276,7 @@ class Service:
         return app_folder
 
     async def process_commit(
-        self, commit_sha: str, force_run: bool = False
+        self, commit_sha: str, force_robot: bool = False
     ) -> CommitTestStatus:
         """
         Check status of commit. Execute robot if not already done. Check for the result of the visual regression test.
@@ -296,13 +297,14 @@ class Service:
         if commit_status is None:
             commit_test_status = CommitTestStatus.ROBOT_PENDING
         else:
-            commit_test_status = CommitTestStatus.ERROR
             for status in CommitTestStatus:
                 if status.value in commit_status.description:
                     commit_test_status = status
                     break
+        if commit_test_status is None:
+            commit_test_status = CommitTestStatus.ERROR
 
-        if commit_test_status is CommitTestStatus.ROBOT_PENDING or force_run:
+        if commit_test_status is CommitTestStatus.ROBOT_PENDING or force_robot:
             # start robot
             commit_status = commit.create_status(
                 state="pending",

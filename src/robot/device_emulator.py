@@ -42,22 +42,22 @@ class DeviceEmulator:
 
     async def turn_left(self):
         while self.rotation >= 0:
-            await self._type_text("_$rxp")
+            await self._type_text("+10x")
             self.rotation -= 1
 
     async def turn_far_left(self):
         while self.rotation >= -1:
-            await self._type_text("_$rxp")
+            await self._type_text("+10x")
             self.rotation -= 1
 
     async def turn_right(self):
         while self.rotation <= 0:
-            await self._type_text("_$rxn")
+            await self._type_text("-10x")
             self.rotation += 1
 
     async def turn_far_right(self):
         while self.rotation <= 1:
-            await self._type_text("_$rxn")
+            await self._type_text("-10x")
             self.rotation += 1
 
     async def _type_text(self, text: str):

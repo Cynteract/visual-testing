@@ -226,12 +226,15 @@ class App:
                 self.resize_offsets = self._calculate_resize_offsets()
             frame = self.window.getClientFrame()
             frame_size = (frame.right - frame.left, frame.bottom - frame.top)
+            new_size = (
+                self.requested_client_frame_size[0] + self.resize_offsets[0],
+                self.requested_client_frame_size[1] + self.resize_offsets[1],
+            )
             if self.requested_client_frame_size != frame_size:
-                resizeOk = self.window.resizeTo(
-                    self.requested_client_frame_size[0] + self.resize_offsets[0],
-                    self.requested_client_frame_size[1] + self.resize_offsets[1],
-                    wait=True,
-                )
+                resizeOk = self.window.resizeTo(new_size[0], new_size[1], wait=True)
+                # try twice
+                if not resizeOk:
+                    resizeOk = self.window.resizeTo(new_size[0], new_size[1], wait=True)
                 assert resizeOk, "Failed to resize the app window to enforce size"
         if self.window.position != (0, 0):
             # place window at top left corner
