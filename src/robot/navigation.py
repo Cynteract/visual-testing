@@ -39,7 +39,13 @@ class Navigation:
             self.app, self.img_dir / relative_image_path, confidence=confidence
         )
 
-    async def detect_current_page(self, timeout: float = 2) -> Pages:
+    async def detect_current_page(self, timeout: float | None = None) -> Pages:
+        if timeout is None:
+            uptime = self.app.uptime()
+            if uptime is not None and uptime < 30.0:
+                timeout = 15.0
+            else:
+                timeout = 2.0
         timer = Timeout(
             timeout,
             f"Current page not detected within {timeout} seconds",

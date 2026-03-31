@@ -44,15 +44,15 @@ async def main():
 
 
 # utility to reset commit status
-def reset_commit():
+def reset_commit(commit_hash: str):
     import github
 
     env = load_env_file()
     repo = github.Github(auth=github.Auth.Token(env["GITHUB_PAT"])).get_repo(
         "Cynteract/cynteract-app"
     )
-    logging.info(f"Reset commit status for {env['SINGLE_RUN_COMMIT']}.")
-    commit = repo.get_commit(env["SINGLE_RUN_COMMIT"])
+    logging.info(f"Reset commit status for {commit_hash}.")
+    commit = repo.get_commit(commit_hash)
     commit.create_status(
         state="pending",
         context="visual regression test",
@@ -64,15 +64,15 @@ def reset_commit():
 
 
 # utility to skip robot test for a commit
-def skip_commit():
+def skip_commit(commit_hash: str):
     import github
 
     env = load_env_file()
     repo = github.Github(auth=github.Auth.Token(env["GITHUB_PAT"])).get_repo(
         "Cynteract/cynteract-app"
     )
-    logging.info(f"Skip robot test for commit {env['SINGLE_RUN_COMMIT']}.")
-    commit = repo.get_commit(env["SINGLE_RUN_COMMIT"])
+    logging.info(f"Skip robot test for commit {commit_hash}.")
+    commit = repo.get_commit(commit_hash)
     commit.create_status(
         state="success",
         context="visual regression test",
@@ -85,14 +85,28 @@ def skip_commit():
 if __name__ == "__main__":
     logging.basicConfig(format="%(levelname)s %(message)s", level=logging.INFO)
 
+    env = load_env_file()
+
     argparser = argparse.ArgumentParser()
-    argparser.add_argument("--reset-commit", action="store_true")
-    argparser.add_argument("--skip-commit", action="store_true")
+    argparser.add_argument(
+        "--reset-commit",
+        type=str,
+        required=False,
+        default=env.get("SINGLE_RUN_COMMIT"),
+        help="Commit hash to reset.",
+    )
+    argparser.add_argument(
+        "--skip-commit",
+        type=str,
+        required=False,
+        default=env.get("SINGLE_RUN_COMMIT"),
+        help="Commit hash to skip.",
+    )
     args = argparser.parse_args()
 
-    if args.reset_commit:
-        reset_commit()
-    elif args.skip_commit:
-        skip_commit()
+    if args.reset_commit is not None:
+        reset_commit(args.reset_commit)
+    elif args.skip_commit is not None:
+        skip_commit(args.skip_commit)
     else:
         asyncio.run(main())

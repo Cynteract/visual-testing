@@ -77,6 +77,16 @@ class TestResult:
         self.target_url = target_url
 
 
+@dataclass
+class _CommitDetails:
+    version: str
+    branch: str
+    description: str
+
+    def __str__(self) -> str:
+        return f"{self.description} ({self.version})"
+
+
 class Service:
     def __init__(
         self,
@@ -119,7 +129,7 @@ class Service:
                 logging.warning("- VRT Password not provided")
 
     async def execute_command(self, *args: str, **kwargs) -> str:
-        logging.info(f"Execute command: {' '.join(args)}")
+        logging.info(f"Execute {' '.join(args)}")
         subprocess_result = await asyncio.create_subprocess_exec(
             *args,
             stdout=asyncio.subprocess.PIPE,
@@ -187,7 +197,7 @@ class Service:
                     await asyncio.sleep(0)
         return build_result
 
-    async def get_version_and_branch(self, commit: Commit) -> tuple[str, str]:
+    async def get_commit_details(self, commit: Commit) -> _CommitDetails:
         branch = None
         development_branch = self.repo.get_branch("development")
         if development_branch.commit.sha == commit.sha or any(
@@ -197,16 +207,23 @@ class Service:
                 "--ci-development", "--commitish=" + commit.sha
             )
             branch = "development"
+            description = "\033[1mdevelopment\033[0m"
         elif commit.get_pulls().totalCount > 0:
             pr = commit.get_pulls().get_page(0)[0]
             version_info = await self.get_version_info(
                 f"--ci-pr={pr.number}", "--commitish=" + commit.sha
             )
             branch = pr.head.ref
+            description = f"\033[1mPR #{pr.number}\033[0m: {pr.title}"
         else:
             raise RuntimeError(f"Neither development nor PR commit: {commit.sha}")
         _, file_name_base, _ = version_info.split(",")
-        return file_name_base, branch
+        details = _CommitDetails(
+            version=file_name_base,
+            branch=branch,
+            description=description,
+        )
+        return details
 
     async def download_file(self, url: str, file_path: Path) -> None:
         """Download a file with retry logic on connection errors."""
@@ -266,7 +283,7 @@ class Service:
         if not app_folder.exists():
             zip_path = app_folder.with_name(app_folder.name + ".zip")
             if not zip_path.exists():
-                logging.info(f"Download build for version {version}.")
+                logging.info(f"Download {version}.")
                 base_url = "https://storage.googleapis.com/cynteract-unity-auto-build"
                 download_url = f"{base_url}/windows/{zip_path.name}"
                 await self.download_file(download_url, zip_path)
@@ -282,9 +299,9 @@ class Service:
         Check status of commit. Execute robot if not already done. Check for the result of the visual regression test.
         Returns True if processing is complete, False otherwise.
         """
-        logging.info(f"Process commit {commit_sha}.")
         commit = self.repo.get_commit(commit_sha)
-        version, branch = await self.get_version_and_branch(commit)
+        commit_details = await self.get_commit_details(commit)
+        logging.info(f"Process {commit_details}.")
 
         # get commit status
         commit_status = None
@@ -314,9 +331,8 @@ class Service:
                 ),
                 target_url="",
             )
-            test_result = await self.run_commit_test(version, branch)
-            logging.info(
-                f"Test result for commit {commit.sha}: {test_result.test_status.value} - {test_result.details}"
+            test_result = await self.run_commit_test(
+                commit_details.version, commit_details.branch
             )
             commit_status = commit.create_status(
                 state=(
@@ -330,11 +346,21 @@ class Service:
                 ),
                 target_url=test_result.target_url if test_result.target_url else "",
             )
+            if test_result.test_status == CommitTestStatus.SUCCESS:
+                logging.info(f"Robot+VRT success.")
+            elif test_result.test_status == CommitTestStatus.VRT_PENDING:
+                logging.info(
+                    f"Robot success, waiting for VRT: {test_result.target_url} ."
+                )
+            else:
+                logging.info(
+                    f"Robot result: {test_result.test_status.value} - {test_result.details}"
+                )
             return test_result.test_status
         elif commit_test_status is CommitTestStatus.VRT_PENDING:
             assert commit_status is not None
             # check if human review is done
-            build = self.vrt_client.get_build(ciBuildId=version)
+            build = self.vrt_client.get_build(ciBuildId=commit_details.version)
             if build.status == "passed":
                 # all done
                 commit_status = commit.create_status(
@@ -345,6 +371,7 @@ class Service:
                     ),
                     target_url=commit_status.target_url,
                 )
+                logging.info(f"VRT success.")
                 return CommitTestStatus.SUCCESS
             elif build.status == "unresolved" or build.status == "new":
                 # still pending
@@ -361,9 +388,7 @@ class Service:
                 )
                 return CommitTestStatus.VRT_FAILURE
             else:
-                logging.error(
-                    f"Unknown VRT build status '{build.status}' for commit {commit.sha}"
-                )
+                logging.error(f"Unknown VRT build status '{build.status}'")
                 return CommitTestStatus.ERROR
         elif (
             commit_test_status is CommitTestStatus.ROBOT_FAILURE
@@ -373,14 +398,10 @@ class Service:
             or commit_test_status is CommitTestStatus.ERROR
         ):
             assert commit_status is not None
-            logging.info(
-                f"Robot already finished for commit {commit.sha} with status {commit_status.description}."
-            )
+            logging.info(f"Skip status {commit_status.description}.")
             return commit_test_status
         else:
-            logging.error(
-                f'No action defined for commit {commit.sha} with status "{commit_test_status}"'
-            )
+            logging.error(f'No action defined for status "{commit_test_status}"')
             return commit_test_status
 
     async def run(self):

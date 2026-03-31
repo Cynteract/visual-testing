@@ -46,6 +46,7 @@ class App:
     file_path: Path | None = None
     state: AppState = AppState.Uninitialized
     debug_dir: Path | None = None
+    launch_time: datetime | None = None
 
     @dataclass
     class ImageCache:
@@ -100,6 +101,7 @@ class App:
             process = subprocess.Popen([str(self.file_path)])
             self.pid = process.pid
             self.state = AppState.Launched
+            self.launch_time = datetime.now()
             window_timeout = 15.0
         else:
             self.state = AppState.Grabbed
@@ -109,6 +111,14 @@ class App:
         await self._find_window(timeout=window_timeout)
         assert self.window
         self.window.activate()
+
+    def uptime(self) -> float | None:
+        """
+        Returns the uptime of the app in seconds, or None if the app is not running or launch time is not available.
+        """
+        if self.launch_time is None or self.state == AppState.Closed:
+            return None
+        return (datetime.now() - self.launch_time).total_seconds()
 
     async def _find_process(self, timeout: float = 5):
         """
