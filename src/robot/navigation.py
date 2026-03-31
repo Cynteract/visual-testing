@@ -106,8 +106,15 @@ class Navigation:
     async def go_to_page(self, target: Pages) -> None:
         await self.detect_current_page()
         current_page = self.state_machine.state.page
+        visited_states = [self.state_machine.state]
         while current_page != target:
             new = await self.state_machine.go_towards(UIState(target))
+            loop_detected = new in visited_states
+            visited_states.append(new)
+            if loop_detected:
+                raise ValueError(
+                    f"Transition loop detected:\n{"\n".join([f"* {str(state)}" if state == new else f"  {str(state)}" for state in visited_states])}"
+                )
             current_page = new.page
 
     async def trigger_transition(self, target: Pages) -> None:
