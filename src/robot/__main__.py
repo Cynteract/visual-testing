@@ -29,10 +29,13 @@ def main(args: RobotArguments):
     assert args.binary_path is not None, "Binary path must be provided"
     # run pytest
     logging.info(f"Start robot with binary {args.binary_path} .")
-    # (default) capture output on stdout. See https://docs.pytest.org/en/stable/reference/reference.html#cmdoption-capture
-    capture = "fd"
+    debug_options = []
     if os.environ.get("DEBUG") is not None:
-        capture = "no"
+        debug_options = [
+            # (default --capture="fd") capture output on stdout. See https://docs.pytest.org/en/stable/reference/reference.html#cmdoption-capture
+            "--capture",
+            "no",
+        ]
     exit_code = pytest.main(
         [
             "-x",
@@ -41,10 +44,9 @@ def main(args: RobotArguments):
             args.test_id,
             "--binary-path",
             args.binary_path,
-            "--capture",
-            capture,
             "--html",
             str(get_data_dir(args.test_id) / "report.html"),
+            *debug_options,
         ]
     )
     if args.close_app_after_tests:

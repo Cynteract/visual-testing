@@ -29,15 +29,26 @@ async def login_with_browser_cookie_absent(username: str, password: str, test_id
         await browser.resize_client_frame(*frame_size)
         browser.enforce_size()
 
-        await assert_image(browser, img_dir / "enter_email.png", timeout=5)
+        # lower confidence than default for cross-browser compatibility
+        confidence = 0.8
+
+        await assert_image(
+            browser, img_dir / "enter_email.png", timeout=5, confidence=confidence
+        )
         await screenshot(browser, "browser_sign_in", test_id)
-        await click_image(browser, img_dir / "enter_email.png", timeout=1)
+        await click_image(
+            browser, img_dir / "enter_email.png", timeout=1, confidence=confidence
+        )
         await type_text(username, interval=0.05)
         # cancel any password manager popups
         await type_key(pynput.keyboard.Key.esc)
-        await click_image(browser, img_dir / "enter_password.png", timeout=1)
+        await click_image(
+            browser, img_dir / "enter_password.png", timeout=1, confidence=confidence
+        )
         await type_text(password, interval=0.05)
-        await click_image(browser, img_dir / "click_sign_in.png", timeout=1)
+        await click_image(
+            browser, img_dir / "click_sign_in.png", timeout=1, confidence=confidence
+        )
         await asyncio.sleep(0.1)
         await screenshot(browser, "browser_signing_in", test_id)
-        # await assert_image(browser, img_dir / "assert_sign_in_success.png", timeout=10)
+        # await assert_image(browser, img_dir / "assert_sign_in_success.png", timeout=10, confidence=confidence)

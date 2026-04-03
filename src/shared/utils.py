@@ -24,4 +24,4 @@ class PrintDuration:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         duration = time.time() - self.start_time
-        logging.warning(f"{self.message} duration: {duration:.3f}s")
+        logging.info(f"[{duration:.3f}s] {self.message}")

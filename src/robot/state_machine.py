@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 from robot.device_types import DeviceTypes
 from robot.pages import Pages
 from robot.states import DefinedUIState, Games, UIState
-from robot.transitions import DefinedTransition, get_next_transition
+from robot.transitions import DefinedTransition, Transitions
 
 
 class UIStateMachine:
@@ -14,6 +14,7 @@ class UIStateMachine:
         self.transition_actions: list[
             Callable[[DefinedTransition, bool, float | None], Awaitable[bool]]
         ] = []
+        self.transitions = Transitions()
 
     def register_transition_actions(
         self,
@@ -42,7 +43,7 @@ class UIStateMachine:
         return self.state
 
     async def go_towards(self, new: UIState) -> DefinedUIState:
-        transition = get_next_transition(self.state, new)
+        transition = self.transitions.get_next_transition(self.state, new)
         if os.environ.get("DEBUG"):
             message = f"Trigger {self.state} → {new}"
             if not new.matches(transition.new):
@@ -52,7 +53,7 @@ class UIStateMachine:
 
     async def trigger_towards(self, new: UIState) -> None:
         """Trigger transition to other page without waiting for it to complete."""
-        transition = get_next_transition(self.state, new)
+        transition = self.transitions.get_next_transition(self.state, new)
         if os.environ.get("DEBUG"):
             message = f"Trigger {self.state} → {new}"
             if not new.matches(transition.new):
