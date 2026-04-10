@@ -294,8 +294,11 @@ class App:
             client_frame.bottom,
         )
 
-    def _get_large_image(self) -> ImageCache:
-        bbox = self._get_bounding_box()
+    def _get_large_image(
+        self, bbox: tuple[int, int, int, int] | None = None
+    ) -> ImageCache:
+        if bbox is None:
+            bbox = self._get_bounding_box()
         # load images, cv2 uses numpy arrays in BGR format
         # grabbing window only does not work on all windows, see https://github.com/python-pillow/Pillow/pull/8516#issuecomment-3794640267
         with PIL.ImageGrab.grab(bbox=bbox) as window_grab:
@@ -342,7 +345,10 @@ class App:
         cv2.imwrite(str(target_dir / f"large.png"), large_image.gray_image)
 
     async def locate(
-        self, small_image_path: Path, confidence: float | None = 0.9
+        self,
+        small_image_path: Path,
+        confidence: float | None = 0.9,
+        region: tuple[float, float, float, float] | None = None,
     ) -> tuple[int, int, int, int] | None:
         """
         Locates the given image on the app window screenshot. Returns the bounding box if found, otherwise None.
@@ -352,6 +358,8 @@ class App:
         assert self.window, "App window is not available. Call open() first."
         if confidence is None:
             confidence = 0.9
+        if region is None:
+            region = (0, 0, 1.0, 1.0)
         if self.debug_dir is not None:
             timestamp = (
                 datetime.now().isoformat(timespec="milliseconds").replace(":", "-")
@@ -362,16 +370,23 @@ class App:
         else:
             debug_save_dir = None
 
-        bbox = self._get_bounding_box()
+        window_bbox = self._get_bounding_box()
+        bbox = (
+            int(window_bbox[0] + region[0] * (window_bbox[2] - window_bbox[0])),
+            int(window_bbox[1] + region[1] * (window_bbox[3] - window_bbox[1])),
+            int(window_bbox[0] + region[2] * (window_bbox[2] - window_bbox[0])),
+            int(window_bbox[1] + region[3] * (window_bbox[3] - window_bbox[1])),
+        )
 
         # enforce size before taking screenshot
         if self.enforce_size_task != None and self.window.isMaximized:
             await self._enforce_size_once()
 
-        if self.cached_large_image is not None:
+        if self.cached_large_image is not None and region == (0, 0, 1.0, 1.0):
             large_image = self.cached_large_image
         else:
-            large_image = self._get_large_image()
+            large_image = self._get_large_image(bbox=bbox)
+
         small_image = self._get_small_image(small_image_path)
         assert (
             large_image.gray_image.shape[0] >= small_image.gray_image.shape[0]

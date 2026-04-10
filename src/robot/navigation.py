@@ -33,10 +33,16 @@ class Navigation:
         return await self.app.locate(self.img_dir / relative_image_path, confidence)
 
     async def click_image(
-        self, relative_image_path: str, confidence: float | None = None
+        self,
+        relative_image_path: str,
+        confidence: float | None = None,
+        region: tuple[float, float, float, float] | None = None,
     ):
         await click_image(
-            self.app, self.img_dir / relative_image_path, confidence=confidence
+            self.app,
+            self.img_dir / relative_image_path,
+            confidence=confidence,
+            region=region,
         )
 
     async def detect_current_page(self, timeout: float | None = None) -> Pages:
@@ -166,13 +172,17 @@ class Navigation:
         elif transition.matches(Pages.movement_selection, Pages.calibrate):
             await self.click_image("movement_selection/click_head_down.png", 0.95)
         elif transition.matches(Pages.game_center, Pages.movement_selection):
-            await self.click_image("sphere_runner/click_preview.png", 0.95)
+            await self.click_image("sphere_runner/click_preview.png", 0.8)
             self.pending_game = Games.sphere_runner
         elif transition.matches(Pages.calibrate, Pages.gameplay):
             await self.device_emulator.turn_left()
-            await self.click_image("calibrate/click_confirm.png", 0.7)
+            await self.click_image(
+                "calibrate/click_confirm.png", region=(0.0, 0.0, 0.5, 1.0)
+            )
             await self.device_emulator.turn_right()
-            await self.click_image("calibrate/click_confirm.png", 0.7)
+            await self.click_image(
+                "calibrate/click_confirm.png", region=(0.5, 0.0, 1.0, 1.0)
+            )
         elif transition.matches(PageTags.game, Pages.pause_menu):
             await self.click_image("game/click_menu.png")
         elif transition.matches(Pages.pause_menu, Pages.home):
