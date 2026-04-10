@@ -3,6 +3,7 @@ import asyncio
 from pynput.keyboard import Controller
 
 from robot.device_types import DeviceTypes
+from robot.player_log_monitor import PlayerLogMonitor
 from robot.state_machine import UIStateMachine
 from robot.states import UIState
 from robot.transitions import DefinedTransition
@@ -13,11 +14,14 @@ class DeviceEmulator:
         self,
         keyboard: Controller,
         state_machine: UIStateMachine,
+        player_log: PlayerLogMonitor,
     ):
         self.keyboard: Controller = keyboard
         self.device_type: DeviceTypes | None = None
         self.rotation: int = 0
         self.state_machine = state_machine
+        self.player_log = player_log
+
         state_machine.register_transition_actions(self.device_actions)
 
     async def __aenter__(self):
@@ -29,16 +33,18 @@ class DeviceEmulator:
             await self.state_machine.go_towards(UIState(DeviceTypes.not_connected))
 
     async def connect(self, device_name: str):
-        await self._type_text("_$" + device_name)
-        self.device_type = DeviceTypes.strap
-        self.rotation = 0
-        self.state_machine.update_device(self.device_type)
+        async with self.player_log.assert_line(f"Emulator: connect {device_name}"):
+            await self._type_text("_$" + device_name)
+            self.device_type = DeviceTypes.strap
+            self.rotation = 0
+            self.state_machine.update_device(self.device_type)
 
     async def disconnect(self):
-        await self._type_text("_$disconnect")
-        self.device_type = DeviceTypes.not_connected
-        self.rotation = 0
-        self.state_machine.update_device(self.device_type)
+        async with self.player_log.assert_line("Emulator: disconnect"):
+            await self._type_text("_$disconnect")
+            self.device_type = DeviceTypes.not_connected
+            self.rotation = 0
+            self.state_machine.update_device(self.device_type)
 
     async def turn_left(self):
         while self.rotation >= 0:

@@ -12,6 +12,7 @@ from robot.device_emulator import DeviceEmulator
 from robot.device_types import DeviceTypes
 from robot.navigation import Navigation
 from robot.pages import Pages
+from robot.player_log_monitor import PlayerLogMonitor
 from robot.state_machine import UIStateMachine
 from robot.states import DefinedUIState, Games
 from robot.utils import keyboard
@@ -52,6 +53,11 @@ async def app(binary_path):
 
 
 @pytest.fixture
+def player_log_monitor():
+    yield PlayerLogMonitor()
+
+
+@pytest.fixture
 async def state_machine(app):
     yield UIStateMachine(
         initial_state=DefinedUIState(
@@ -63,8 +69,12 @@ async def state_machine(app):
 
 
 @pytest_asyncio.fixture
-async def device_emulator(state_machine: UIStateMachine):
-    async with DeviceEmulator(keyboard, state_machine) as device_emulator:
+async def device_emulator(
+    state_machine: UIStateMachine, player_log_monitor: PlayerLogMonitor
+):
+    async with DeviceEmulator(
+        keyboard, state_machine, player_log_monitor
+    ) as device_emulator:
         yield device_emulator
 
 
