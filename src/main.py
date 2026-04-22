@@ -92,14 +92,18 @@ if __name__ == "__main__":
         "--reset-commit",
         type=str,
         required=False,
-        default=env.get("SINGLE_RUN_COMMIT"),
+        default=None,
+        nargs="?",
+        const=env.get("SINGLE_RUN_COMMIT"),
         help="Commit hash to reset.",
     )
     argparser.add_argument(
         "--skip-commit",
         type=str,
         required=False,
-        default=env.get("SINGLE_RUN_COMMIT"),
+        default=None,
+        nargs="?",
+        const=env.get("SINGLE_RUN_COMMIT"),
         help="Commit hash to skip.",
     )
     args = argparser.parse_args()

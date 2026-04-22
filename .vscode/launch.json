@@ -32,6 +32,15 @@
       "justMyCode": false
     },
     {
+      "name": "main.py (with reset)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/main.py",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "preLaunchTask": "reset"
+    },
+    {
       "name": "robot",
       "type": "debugpy",
       "request": "launch",
