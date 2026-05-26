@@ -24,6 +24,9 @@ def run_pyinfra(func, host, sudo_password: str, **kwargs):
         logging.error("PyinfraError: {0}".format(e))
 
 
+def assert_env_variable(env, key):
+    assert env.get(key) is not None, f"{key} not found in environment"
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run tests on Cynteract App.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -47,23 +50,18 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     env = load_env_file()
-    assert (
-        env.get("VRT_ADMIN_EMAIL") is not None
-    ), "VRT_ADMIN_EMAIL not found in environment"
-    assert (
-        env.get("VRT_ADMIN_PASSWORD") is not None
-    ), "VRT_ADMIN_PASSWORD not found in environment"
-    assert (
-        env.get("VRT_ADMIN_API_KEY") is not None
-    ), "VRT_ADMIN_API_KEY not found in environment"
+    assert_env_variable(env, "ROBOT_USERNAME")
+    assert_env_variable(env, "ROBOT_PASSWORD")
+    assert_env_variable(env, "GITHUB_PAT")
+    assert_env_variable(env, "VRT_API_URL")
+    assert_env_variable(env, "VRT_FRONTEND_URL")
+    assert_env_variable(env, "VRT_ADMIN_EMAIL")
+    assert_env_variable(env, "VRT_ADMIN_PASSWORD")
+    assert_env_variable(env, "VRT_ADMIN_API_KEY")
 
     if args.command == "vrt":
-        assert (
-            env.get("SUDO_PASSWORD") is not None
-        ), "SUDO_PASSWORD not found in environment"
-        assert (
-            env.get("VRT_POSTGRES_PASSWORD") is not None
-        ), "VRT_POSTGRES_PASSWORD not found in environment"
+        assert_env_variable(env, "SUDO_PASSWORD")
+        assert_env_variable(env, "VRT_POSTGRES_PASSWORD")
 
         from pyinfra.api.config import Config
         from pyinfra.api.connect import connect_all
@@ -89,12 +87,6 @@ if __name__ == "__main__":
         )
 
     elif args.command == "robot":
-        from setup.deploy_robot import RobotConfig, deploy_robot
+        from setup.deploy_robot import deploy_robot
 
-        deploy_robot(
-            robot_config=RobotConfig(
-                vrt_email=env["VRT_ADMIN_EMAIL"],
-                vrt_password=env["VRT_ADMIN_PASSWORD"],
-                vrt_api_key=env["VRT_ADMIN_API_KEY"],
-            ),
-        )
+        deploy_robot()

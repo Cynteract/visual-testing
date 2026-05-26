@@ -2,21 +2,14 @@ import logging
 import os
 import subprocess
 import sys
-from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
 
 from robot.config import get_builds_download_dir
 
 
-@dataclass
-class RobotConfig:
-    vrt_email: str
-    vrt_password: str
-    vrt_api_key: str
 
-
-def deploy_robot(robot_config: RobotConfig):
+def deploy_robot():
     if sys.platform != "win32":
         logging.error("Robot deployment is only supported on Windows.")
         sys.exit(1)
@@ -34,20 +27,20 @@ def deploy_robot(robot_config: RobotConfig):
     logging.info(f"Python version OK")
 
     # Create virtual environment in repository root if it doesn't exist
-    venv_python = project_root / ".venv" / "Scripts" / "python.exe"
+    venv_folder = project_root / ".venv"
+    venv_python = venv_folder / "Scripts" / "python.exe" 
     if not venv_python.exists():
-        logging.info(f"Create virtual environment in {venv_python} .")
-        subprocess.run([sys.executable, "-m", "venv", str(project_root / ".venv")])
+        logging.info(f"Creating virtual environment in {venv_folder} ...")
+        subprocess.run([sys.executable, "-m", "venv", str(venv_folder)])
 
     # Activate virtual environment if not already activated
     if not Path(sys.executable).samefile(venv_python):
-        logging.info(f"Activate virtual environment {venv_python} .")
-        venv_process = subprocess.run([str(venv_python), __file__])
+        logging.info(f"Activating virtual environment {venv_python} ...")
+        venv_process = subprocess.run(executable = str(venv_python), args = [str(venv_python), *sys.argv], shell = False)
         sys.exit(venv_process.returncode)
     else:
         logging.info(f"Virtual environment OK")
 
-    # Install pip requirements if not already installed
     requirements_path = project_root / "requirements.txt"
     with open(requirements_path) as f:
         required_packages = [
@@ -64,11 +57,12 @@ def deploy_robot(robot_config: RobotConfig):
             logging.info(f"Package [{package}] not installed.")
             break
     if needs_reinstall:
-        subprocess.run(
-            [str(venv_python), "-m", "pip", "install", "-r", str(requirements_path)]
-        )
+        logging.info("Installing missing pip requirements...")
+        subprocess.run([str(venv_python), "-m", "pip", "install", "-r", str(requirements_path)])
+        venv_process = subprocess.run(executable = str(venv_python), args = [str(venv_python), *sys.argv], shell = False)
+        sys.exit(venv_process.returncode)
     else:
-        logging.info(f"Pip requirements OK")
+        logging.info("Pip requirements OK")
 
     # Install node and dependencies for firebase user scripts if not already installed
     firebase_scripts_dir = project_root / "src" / "firebase_user_scripts"
