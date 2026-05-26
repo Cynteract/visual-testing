@@ -14,7 +14,6 @@ IF %ERRORLEVEL% NEQ 0 (
 )
 
 :: Check for project's Python version
-
 call python --version >nul 2>&1
 IF %ERRORLEVEL% NEQ 0 (
     echo Python version not found, installing...

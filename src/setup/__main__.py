@@ -48,12 +48,6 @@ if __name__ == "__main__":
 
     env = load_env_file()
     assert (
-        env.get("SUDO_PASSWORD") is not None
-    ), "SUDO_PASSWORD not found in environment"
-    assert (
-        env.get("VRT_POSTGRES_PASSWORD") is not None
-    ), "VRT_POSTGRES_PASSWORD not found in environment"
-    assert (
         env.get("VRT_ADMIN_EMAIL") is not None
     ), "VRT_ADMIN_EMAIL not found in environment"
     assert (
@@ -64,6 +58,13 @@ if __name__ == "__main__":
     ), "VRT_ADMIN_API_KEY not found in environment"
 
     if args.command == "vrt":
+        assert (
+            env.get("SUDO_PASSWORD") is not None
+        ), "SUDO_PASSWORD not found in environment"
+        assert (
+            env.get("VRT_POSTGRES_PASSWORD") is not None
+        ), "VRT_POSTGRES_PASSWORD not found in environment"
+
         from pyinfra.api.config import Config
         from pyinfra.api.connect import connect_all
         from pyinfra.api.exceptions import PyinfraError
