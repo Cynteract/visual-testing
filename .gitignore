@@ -1,3 +1,6 @@
 __pycache__/
 /.env
 /.venv
+
+# cached installation script for pyenv-win
+install-pyenv-win.ps1

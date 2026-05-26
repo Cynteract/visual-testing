@@ -2,6 +2,8 @@ from pathlib import Path
 
 from shared.utils import load_env_file
 
+def get_builds_download_dir() -> Path:
+    return Path.home() / "Documents" / "visual_testing" 
 
 def get_data_dir(test_id: str) -> Path:
     return Path.home() / "Documents" / "visual_testing" / test_id
