@@ -8,7 +8,6 @@ from pathlib import Path
 from robot.config import get_builds_download_dir
 
 
-
 def deploy_robot():
     if sys.platform != "win32":
         logging.error("Robot deployment is only supported on Windows.")
@@ -28,7 +27,7 @@ def deploy_robot():
 
     # Create virtual environment in repository root if it doesn't exist
     venv_folder = project_root / ".venv"
-    venv_python = venv_folder / "Scripts" / "python.exe" 
+    venv_python = venv_folder / "Scripts" / "python.exe"
     if not venv_python.exists():
         logging.info(f"Creating virtual environment in {venv_folder} ...")
         subprocess.run([sys.executable, "-m", "venv", str(venv_folder)])
@@ -36,7 +35,9 @@ def deploy_robot():
     # Activate virtual environment if not already activated
     if not Path(sys.executable).samefile(venv_python):
         logging.info(f"Activating virtual environment {venv_python} ...")
-        venv_process = subprocess.run(executable = str(venv_python), args = [str(venv_python), *sys.argv], shell = False)
+        venv_process = subprocess.run(
+            executable=str(venv_python), args=[str(venv_python), *sys.argv], shell=False
+        )
         sys.exit(venv_process.returncode)
     else:
         logging.info(f"Virtual environment OK")
@@ -55,11 +56,14 @@ def deploy_robot():
         if package.lower() not in installed_packages:
             needs_reinstall = True
             logging.info(f"Package [{package}] not installed.")
-            break
     if needs_reinstall:
         logging.info("Installing missing pip requirements...")
-        subprocess.run([str(venv_python), "-m", "pip", "install", "-r", str(requirements_path)])
-        venv_process = subprocess.run(executable = str(venv_python), args = [str(venv_python), *sys.argv], shell = False)
+        subprocess.run(
+            [str(venv_python), "-m", "pip", "install", "-r", str(requirements_path)]
+        )
+        venv_process = subprocess.run(
+            executable=str(venv_python), args=[str(venv_python), *sys.argv], shell=False
+        )
         sys.exit(venv_process.returncode)
     else:
         logging.info("Pip requirements OK")
@@ -87,9 +91,7 @@ def deploy_robot():
         logging.info(f"Create start_cynteract_robot.bat in startup folder.")
         python_path = Path(sys.executable).resolve()
         with open(startup_bat, "w") as bat_file:
-            bat_content = (
-                f'@echo off\ncd {project_root}\n"{python_path}" -m github_service\n'
-            )
+            bat_content = f'@echo off\nset PYTHONPATH=src\ncd {project_root}\n"{python_path}" -m github_service\n'
             bat_file.write(bat_content)
     else:
         logging.info(f"Startup script OK")
