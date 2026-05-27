@@ -1,7 +1,4 @@
-import asyncio
-
-from pynput.keyboard import Controller
-
+from robot.dev_console_actions import DevConsole
 from robot.device_types import DeviceTypes
 from robot.player_log_monitor import PlayerLogMonitor
 from robot.state_machine import UIStateMachine
@@ -12,11 +9,11 @@ from robot.transitions import DefinedTransition
 class DeviceEmulator:
     def __init__(
         self,
-        keyboard: Controller,
+        dev_console: DevConsole,
         state_machine: UIStateMachine,
         player_log: PlayerLogMonitor,
     ):
-        self.keyboard: Controller = keyboard
+        self.dev_console = dev_console
         self.device_type: DeviceTypes | None = None
         self.rotation: int = 0
         self.state_machine = state_machine
@@ -34,44 +31,37 @@ class DeviceEmulator:
 
     async def connect(self, device_name: str):
         async with self.player_log.assert_line(f"Emulator: connect {device_name}"):
-            await self._type_text("_$" + device_name)
+            await self.dev_console.run_command(device_name)
             self.device_type = DeviceTypes.strap
             self.rotation = 0
             self.state_machine.update_device(self.device_type)
 
     async def disconnect(self):
         async with self.player_log.assert_line("Emulator: disconnect"):
-            await self._type_text("_$disconnect")
+            await self.dev_console.run_command("disconnect")
             self.device_type = DeviceTypes.not_connected
             self.rotation = 0
             self.state_machine.update_device(self.device_type)
 
     async def turn_left(self):
-        while self.rotation >= 0:
-            await self._type_text("+10x")
-            self.rotation -= 1
+        if self.rotation >= 0:
+            await self.dev_console.run_commands([f"+10x"] * (self.rotation + 1))
+            self.rotation = -1
 
     async def turn_far_left(self):
-        while self.rotation >= -1:
-            await self._type_text("+10x")
-            self.rotation -= 1
+        if self.rotation >= -1:
+            await self.dev_console.run_commands([f"+10x"] * (self.rotation + 2))
+            self.rotation = -2
 
     async def turn_right(self):
-        while self.rotation <= 0:
-            await self._type_text("-10x")
-            self.rotation += 1
+        if self.rotation <= 0:
+            await self.dev_console.run_commands([f"-10x"] * (abs(self.rotation) + 1))
+            self.rotation = 1
 
     async def turn_far_right(self):
-        while self.rotation <= 1:
-            await self._type_text("-10x")
-            self.rotation += 1
-
-    async def _type_text(self, text: str):
-        interval = 0.05
-        for char in text:
-            self.keyboard.press(char)
-            self.keyboard.release(char)
-            await asyncio.sleep(interval)
+        if self.rotation <= 1:
+            await self.dev_console.run_commands([f"-10x"] * (2 - self.rotation))
+            self.rotation = 2
 
     async def device_actions(
         self,

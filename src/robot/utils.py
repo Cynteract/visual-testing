@@ -31,9 +31,17 @@ async def type_text(text: str, interval: float = 0.05):
         await asyncio.sleep(interval)
 
 
-async def type_key(key: pynput.keyboard.Key):
+async def type_key(
+    key: pynput.keyboard.Key | str, modifiers: list[pynput.keyboard.Key] | None = None
+):
+    if modifiers:
+        for modifier in modifiers:
+            keyboard.press(modifier)
     keyboard.press(key)
     keyboard.release(key)
+    if modifiers:
+        for modifier in modifiers:
+            keyboard.release(modifier)
 
 
 async def click_image(
