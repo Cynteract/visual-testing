@@ -33,12 +33,20 @@ def pytest_addoption(parser):
 
 @pytest.fixture
 def test_id(pytestconfig):
-    return pytestconfig.getoption("test_id")
+    test_id = pytestconfig.getoption("test_id")
+    assert (
+        test_id is not None
+    ), "test_id must be provided via --test-id or set in .env file"
+    return test_id
 
 
 @pytest.fixture
 def binary_path(pytestconfig):
-    return Path(pytestconfig.getoption("binary_path"))
+    binary_path = pytestconfig.getoption("binary_path")
+    assert (
+        binary_path is not None
+    ), "binary_path must be provided via --binary-path or set in .env file"
+    return Path(binary_path)
 
 
 @pytest_asyncio.fixture
@@ -92,10 +100,13 @@ async def navigation(
 
 def pytest_runtest_makereport(item, call):
     # Check if the test raised an exception (failed)
-    if call.excinfo is not None:
+    if call.when == "call" and call.excinfo is not None:
         logging.error(f"Test {item.name} failed!")
         # take screenshot of the whole screen for debugging
         test_id = item.funcargs.get("test_id")
+        assert (
+            test_id is not None
+        ), "test_id fixture must be used in the test to capture screenshots on failure"
         data_dir = get_data_dir(test_id)
         data_dir.mkdir(parents=True, exist_ok=True)
         with PIL.ImageGrab.grab() as img:
