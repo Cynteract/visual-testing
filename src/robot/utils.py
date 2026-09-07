@@ -1,6 +1,8 @@
 import asyncio
 from pathlib import Path
 
+import cv2
+import numpy
 import pynput
 
 from robot.app import App
@@ -72,6 +74,120 @@ async def click_image(
             return
         timer.check()
         await asyncio.sleep(0.5)
+
+
+async def scroll_until_visible(
+    app: App,
+    image_path: Path,
+    scroll_position: tuple[float, float],
+    direction: int = -1,
+    confidence: float | None = None,
+    region: tuple[float, float, float, float] | None = None,
+    timeout: float = 90.0,
+    max_scrolls: int = 300,
+    stall_limit: int = 6,
+    change_threshold: float = 0.4,
+) -> tuple[int, int, int, int]:
+    """
+    Scrolls the mouse wheel at the given fractional window position (0.0-1.0 on each axis,
+    same convention as `locate`'s `region`) until the given image appears, then returns its
+    bounding box without clicking it.
+
+    Scrolling is single-direction: the list is assumed to start at the top, so `direction`
+    (down) reveals later items. The end of the list is detected by comparing the window
+    before/after each scroll - if it stops changing for `stall_limit` consecutive notches,
+    the list has reached the end and the search fails.
+    """
+    timer = Timeout(
+        timeout,
+        f"Image {image_path} not found via scrolling within {timeout} seconds",
+    )
+    absolute_scroll_position = app.get_window_point(*scroll_position)
+
+    previous = app._get_large_image().gray_image.astype("int32")
+    stalls = 0
+    for _ in range(max_scrolls):
+        bbox_or_null = await app.locate(
+            image_path, confidence=confidence, region=region
+        )
+        if bbox_or_null:
+            return bbox_or_null
+
+        mouse.position = absolute_scroll_position
+        mouse.scroll(0, direction)
+        await asyncio.sleep(0.25)
+        timer.check()
+
+        current = app._get_large_image().gray_image.astype("int32")
+        if float(numpy.abs(current - previous).mean()) < change_threshold:
+            stalls += 1
+            if stalls >= stall_limit:
+                break
+        else:
+            stalls = 0
+        previous = current
+
+    raise TimeoutError(timer.error_message)
+
+
+async def scrollbar_scroll_until_visible(
+    app: App,
+    target_image_path: Path,
+    scrollbar_image_path: Path,
+    confidence: float | None = None,
+    target_region: tuple[float, float, float, float] | None = None,
+    timeout: float = 60.0,
+    step: int = 15,
+) -> tuple[int, int, int, int] | None:
+    """
+    Drags the scrollbar thumb downward until the target image appears in `target_region`,
+    then returns its bounding box. Returns None (instead of raising) when the target is
+    not found - e.g. a game that isn't present in this build - so the caller can skip it.
+
+    The mouse wheel freezes partway through this list (it only reaches ~6 of the games),
+    so the scrollbar itself is the reliable scroll mechanism: locate the thumb and drag it
+    down a small amount per step, re-checking the target after each step.
+    """
+    timer = Timeout(
+        timeout,
+        f"Image {target_image_path} not found via scrollbar within {timeout} seconds",
+    )
+    mouse = pynput.mouse.Controller()
+    thumb = cv2.imread(str(scrollbar_image_path), cv2.IMREAD_GRAYSCALE)
+    assert thumb is not None, f"Could not load scrollbar image at {scrollbar_image_path}"
+
+    while True:
+        bbox_or_null = await app.locate(
+            target_image_path, confidence=confidence, region=target_region
+        )
+        if bbox_or_null:
+            return bbox_or_null
+
+        # find the thumb by its single best match - the thin bar matches many nearby
+        # positions, so take the max rather than app.locate's multi-cluster check
+        large = app._get_large_image().gray_image
+        if thumb.shape[0] > large.shape[0] or thumb.shape[1] > large.shape[1]:
+            return None
+        res = cv2.matchTemplate(large, thumb, cv2.TM_CCOEFF_NORMED)
+        _, maxval, _, maxloc = cv2.minMaxLoc(res)
+        if maxval < 0.8:
+            return None  # thumb gone -> reached the bottom without finding the target
+
+        win = app._get_bounding_box()
+        cx = win[0] + maxloc[0] + thumb.shape[1] // 2
+        cy = win[1] + maxloc[1] + thumb.shape[0] // 2
+
+        mouse.position = (cx, cy)
+        mouse.press(pynput.mouse.Button.left)
+        for i in range(1, 11):
+            mouse.position = (cx, cy + step * i // 10)
+            await asyncio.sleep(0.02)
+        mouse.release(pynput.mouse.Button.left)
+        await asyncio.sleep(0.3)
+        try:
+            timer.check()
+        except TimeoutError:
+            return None
 
 
 async def left_click():

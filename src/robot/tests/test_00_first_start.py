@@ -12,7 +12,7 @@ from robot.navigation import Navigation
 from robot.pages import Pages
 from robot.reset import reset_app_state
 from robot.tests.shared.browser_actions import login_with_browser_cookie_absent
-from robot.tests.test_login import _assert_logged_in
+from robot.tests.test_02_login import _assert_logged_in
 
 
 async def test_first_start_login(
@@ -28,8 +28,14 @@ async def test_first_start_login(
     # the browser might cover the Cynteract window
     await navigation.trigger_transition(Pages.login)
 
-    # browser login
-    await login_with_browser_cookie_absent(username, password, test_id)
+    # a cached session can make the app auto-login and skip the login page entirely -
+    # only attempt the browser-based login if we actually land on it
+    try:
+        await navigation.wait_for_page(Pages.login, timeout=20)
+        await login_with_browser_cookie_absent(username, password, test_id)
+    except TimeoutError:
+        pass
 
-    # assert logged in
-    await _assert_logged_in(app, navigation, timeout=20)
+    # assert logged in - app fetches player data ("Checking for your previous data...")
+    # after login (browser-based or auto-login) completes, before showing home/introduction
+    await _assert_logged_in(app, navigation, timeout=40)

@@ -1,13 +1,26 @@
 from dataclasses import dataclass
 from enum import Enum
 
-from robot.device_emulator import DeviceTypes
+from robot.device_types import DeviceTypes
 from robot.pages import Pages, PageTags
 
 
 class Games(Enum):
     no_game = "no_game"
+    # names verified against the actual game_center label captures (tests/images/game_center/assert_*.png),
+    # not just AvailableGames.cs in the cynteract-app repo, which is stale for 3 of these (see below)
     sphere_runner = "sphere_runner"
+    maze_escape = "maze_escape"
+    tunnel_runner = "tunnel_runner"
+    asteroid_storm = "asteroid_storm"  # AvailableGames.cs calls this "space_invaders" - stale
+    jump_and_roll = "jump_and_roll"  # AvailableGames.cs calls this "jump_and_run" - stale
+    cannon_shot = "cannon_shot"  # AvailableGames.cs calls this "cannon_game" - stale
+    brick_breaker = "brick_breaker"
+    whack_a_blob = "whack_a_blob"
+    weekly_test = "weekly_test"
+    gravity_gambit = "gravity_gambit"
+    highway_hazzard = "highway_hazzard"
+    fruit_frenzy = "fruit_frenzy"
 
 
 # finite amount of possible states

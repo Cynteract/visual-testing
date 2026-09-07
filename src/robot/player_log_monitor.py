@@ -25,11 +25,12 @@ class PlayerLogMonitor:
                 self.timeout,
                 f"Expected log entry '{self.expected_entry}' not found within {self.timeout} seconds",
             )
-            with open(self.log_file_path, "r", encoding="utf-8") as f:
-                f.seek(self.last_position)
-                new_content = f.read()
-                if self.expected_entry in new_content:
-                    return
+            while True:
+                with open(self.log_file_path, "r", encoding="utf-8") as f:
+                    f.seek(self.last_position)
+                    new_content = f.read()
+                    if self.expected_entry in new_content:
+                        return
                 timer.check()
                 await asyncio.sleep(0.5)
 
