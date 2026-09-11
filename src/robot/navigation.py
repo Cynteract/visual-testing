@@ -94,7 +94,10 @@ class Navigation:
         return await self.app.locate(self.img_dir / relative_image_path, confidence)
 
     async def locate_max(
-        self, relative_image_path: str, confidence: float = 0.8
+        self,
+        relative_image_path: str,
+        confidence: float = 0.8,
+        region: tuple[float, float, float, float] | None = None,
     ) -> tuple[int, int, int, int] | None:
         """Return the bbox of the best (max) match, bypassing app.locate's clustering
         guards that reject good matches with >20 above-threshold pixels."""
@@ -109,18 +112,27 @@ class Navigation:
             if cached is not None
             else self.app._get_large_image().gray_image
         )
-        if target.shape[0] > large.shape[0] or target.shape[1] > large.shape[1]:
+        h, w = large.shape
+        if region is not None:
+            rx0 = int(w * region[0])
+            ry0 = int(h * region[1])
+            rx1 = int(w * region[2])
+            ry1 = int(h * region[3])
+        else:
+            rx0, ry0, rx1, ry1 = 0, 0, w, h
+        region_img = large[ry0:ry1, rx0:rx1]
+        if target.shape[0] > region_img.shape[0] or target.shape[1] > region_img.shape[1]:
             return None
-        res = cv2.matchTemplate(large, target, cv2.TM_CCOEFF_NORMED)
+        res = cv2.matchTemplate(region_img, target, cv2.TM_CCOEFF_NORMED)
         _, maxval, _, maxloc = cv2.minMaxLoc(res)
         if maxval < confidence:
             return None
         win = self.app._get_bounding_box()
         return (
-            win[0] + maxloc[0],
-            win[1] + maxloc[1],
-            win[0] + maxloc[0] + target.shape[1],
-            win[1] + maxloc[1] + target.shape[0],
+            win[0] + rx0 + maxloc[0],
+            win[1] + ry0 + maxloc[1],
+            win[0] + rx0 + maxloc[0] + target.shape[1],
+            win[1] + ry0 + maxloc[1] + target.shape[0],
         )
 
     async def _debug_dump_screen(self, images: list[str]):
@@ -241,18 +253,14 @@ class Navigation:
             timer.check()
         return order
 
-    async def reset_game_center_scroll(self, top_game: Games):
-        """Scroll the game_center list back up until `top_game` is focused."""
-        while True:
-            if await self._detect_focused_game() == top_game:
-                return
-            if not await scrollbar_drag_step(
-                self.app,
-                self.img_dir / "game_center" / "drag_scrollbar.png",
-                step=15,
-                direction=-1,
-            ):
-                return
+    async def reset_game_center_scroll(self, top_game: Games | None = None):
+        """Reset the game_center list to the top by leaving to home.
+
+        Going home and re-entering game_center resets the scrollable list. The
+        scrollbar-thumb drag and the position_selection round-trip do NOT reliably
+        reset it.
+        """
+        await self.go_to_page(Pages.home)
 
     async def detect_current_page(self, timeout: float | None = None) -> Pages:
         if timeout is None:
@@ -308,16 +316,10 @@ class Navigation:
                         detected_page = Pages.calibrate
                     elif await self.locate("game/assert_pause_title.png"):
                         detected_page = Pages.pause_menu
-                    elif (
-                        await self.locate_max("game/assert_score.png", 0.8)
-                        or await self.locate("each_game/assert_fruitfrenzy.png")
-                        # the rest of each_game/assert_*.png are disabled - too generic
-                        # (thin bars / plain dots / repeating patterns / blurry crops),
-                        # confirmed to cause MultipleMatchesFoundException on unrelated
-                        # screens since this check runs on every detect_current_page()
-                        # call regardless of page. assert_weeklytest.png is additionally
-                        # just the wrong image (shows "Trend", an achievements tab).
-                        # Re-enable per-game once better crops are captured.
+                    elif await self.locate_max(
+                        "game/assert_score.png",
+                        0.6,
+                        region=(0.0, 0.0, 1.0, 0.5),
                     ):
                         detected_page = Pages.gameplay
                     elif await self.locate("game/assert_feedback_title.png"):
@@ -464,7 +466,7 @@ class Navigation:
         elif transition.matches(Pages.help_page, Pages.home):
             await self.click_image("help_page/click_back.png")
         elif transition.matches(Pages.home, [Pages.please_connect, Pages.game_center]):
-            await self.click_image("home/click_game_center.png")
+            await self.click_image_max("home/click_game_center.png", 0.7)
         elif transition.matches(Pages.please_connect, Pages.home):
             await self.click_image("connect_device/click_back.png")
         elif transition.matches(Pages.position_selection, Pages.game_center):
@@ -519,9 +521,9 @@ class Navigation:
             # game starts neutral instead of carrying that leftover rotation
             await self.device_emulator.reset_rotation()
         elif transition.matches(PageTags.game, Pages.pause_menu):
-            await self.click_image("game/click_menu.png")
+            await self.click_image_max("game/click_menu.png", 0.6)
         elif transition.matches(Pages.pause_menu, Pages.home):
-            await self.click_image("game/click_home.png")
+            await self.click_image_max("game/click_home.png", 0.6)
         elif transition.matches(Pages.feedback, Pages.game_center):
             await self.click_image("game/click_feedback_confirm.png")
         elif transition.matches(PageTags.device_connected, Pages.please_connect):

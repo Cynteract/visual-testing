@@ -19,10 +19,7 @@ async def test_smoke(
     await navigation.go_to_page(Pages.game_center)
     games = await navigation.discover_game_center_order()
     print(f"DISCOVERED: {[g.value for g in games]}")
-    await navigation.reset_game_center_scroll(games[0])
-    focused = await navigation._detect_focused_game()
-    print(f"FOCUSED AFTER RESET: {focused.value if focused else None}")
-    assert focused == games[0], f"reset failed: expected {games[0]}, focused {focused}"
+    await navigation.reset_game_center_scroll()
 
     for game in games:
         print(f"-> entering {game.value}")
