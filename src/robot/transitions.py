@@ -131,7 +131,7 @@ class Transitions:
         T(S(P.startup), S(P.update), 1),
         T(S(P.update), S(P.login), 1),
         T(S(PageTags.any), S(P._restart), 10),
-        T(S(PageTags.device_connected), S(P.please_connect), 1),
+        T(S(PageTags.device_connected), S(P.please_connect), 5),
         T(S(DeviceTypes.not_connected), S(DeviceTypes.strap), 6, _keep_page_and_game),
         T(S(DeviceTypes.strap), S(DeviceTypes.not_connected), 3, _keep_page_and_game),
     ]

@@ -63,6 +63,14 @@ class DeviceEmulator:
             await self.dev_console.run_commands([f"-10x"] * (2 - self.rotation))
             self.rotation = 2
 
+    async def reset_rotation(self):
+        """Return the device to neutral (center) rotation."""
+        if self.rotation > 0:
+            await self.dev_console.run_commands([f"+10x"] * self.rotation)
+        elif self.rotation < 0:
+            await self.dev_console.run_commands([f"-10x"] * abs(self.rotation))
+        self.rotation = 0
+
     async def device_actions(
         self,
         transition: DefinedTransition,

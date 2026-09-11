@@ -9,7 +9,13 @@ from robot.state_machine import UIStateMachine
 from robot.states import Games, UIState
 from robot.timeout import Timeout
 from robot.transitions import DefinedTransition
-from robot.utils import click_image, scrollbar_scroll_until_visible, type_text
+from robot.utils import (
+    click_image,
+    match_best_image,
+    scrollbar_drag_step,
+    scrollbar_scroll_until_visible,
+    type_text,
+)
 
 
 class Navigation:
@@ -47,6 +53,29 @@ class Navigation:
         # Games.weekly_test: "each_game/assert_weeklytest.png",  # wrong image entirely - shows "Trend" (an achievements tab), not weekly test's gameplay
     }
 
+    # per-game movement-select click image. Default (head down) covers most games.
+    _movement_select_clicks: dict[Games, str] = {
+        Games.brick_breaker: "movement_selection/click_head_leftright.png",
+    }
+    _movement_select_default = "movement_selection/click_head_down.png"
+
+    # games that need TWO movement-select + calibration cycles before play:
+    # (first movement, second movement). The second is always up/down.
+    _two_cycle_movements: dict[Games, tuple[str, str]] = {
+        Games.maze_escape: (
+            "movement_selection/click_head_tilt.png",
+            "movement_selection/click_up_down.png",
+        ),
+        Games.asteroid_storm: (
+            "movement_selection/click_head_leftright.png",
+            "movement_selection/click_up_down.png",
+        ),
+        Games.jump_and_roll: (
+            "movement_selection/click_head_leftright.png",
+            "movement_selection/click_up_down.png",
+        ),
+    }
+
     def __init__(
         self,
         app: App,
@@ -64,6 +93,55 @@ class Navigation:
     ) -> tuple[int, int, int, int] | None:
         return await self.app.locate(self.img_dir / relative_image_path, confidence)
 
+    async def locate_max(
+        self, relative_image_path: str, confidence: float = 0.8
+    ) -> tuple[int, int, int, int] | None:
+        """Return the bbox of the best (max) match, bypassing app.locate's clustering
+        guards that reject good matches with >20 above-threshold pixels."""
+        import cv2
+
+        target = cv2.imread(str(self.img_dir / relative_image_path), cv2.IMREAD_GRAYSCALE)
+        if target is None:
+            return None
+        cached = getattr(self.app, "cached_large_image", None)
+        large = (
+            cached.gray_image
+            if cached is not None
+            else self.app._get_large_image().gray_image
+        )
+        if target.shape[0] > large.shape[0] or target.shape[1] > large.shape[1]:
+            return None
+        res = cv2.matchTemplate(large, target, cv2.TM_CCOEFF_NORMED)
+        _, maxval, _, maxloc = cv2.minMaxLoc(res)
+        if maxval < confidence:
+            return None
+        win = self.app._get_bounding_box()
+        return (
+            win[0] + maxloc[0],
+            win[1] + maxloc[1],
+            win[0] + maxloc[0] + target.shape[1],
+            win[1] + maxloc[1] + target.shape[0],
+        )
+
+    async def _debug_dump_screen(self, images: list[str]):
+        """TEMPORARY diagnostic: print the cv2 max match score of each image."""
+        import cv2
+
+        large = self.app._get_large_image().gray_image
+        print(f"--- screen dump ({large.shape[1]}x{large.shape[0]}) ---", flush=True)
+        for img in images:
+            target = cv2.imread(str(self.img_dir / img), cv2.IMREAD_GRAYSCALE)
+            if target is None:
+                print(f"  {img}: MISSING", flush=True)
+                continue
+            if target.shape[0] > large.shape[0] or target.shape[1] > large.shape[1]:
+                print(f"  {img}: too big", flush=True)
+                continue
+            res = cv2.matchTemplate(large, target, cv2.TM_CCOEFF_NORMED)
+            _, maxval, _, maxloc = cv2.minMaxLoc(res)
+            print(f"  {img}: {maxval:.3f} @ {maxloc}", flush=True)
+        print("--- end dump ---", flush=True)
+
     async def click_image(
         self,
         relative_image_path: str,
@@ -77,6 +155,23 @@ class Navigation:
             confidence=confidence,
             region=region,
             **({"timeout": timeout} if timeout is not None else {}),
+        )
+
+    async def click_image_max(
+        self,
+        relative_image_path: str,
+        confidence: float = 0.8,
+        region: tuple[float, float, float, float] | None = None,
+        timeout: float = 5.0,
+    ):
+        from robot.utils import click_image_max as _click_image_max
+
+        await _click_image_max(
+            self.app,
+            self.img_dir / relative_image_path,
+            confidence=confidence,
+            region=region,
+            timeout=timeout,
         )
 
     async def _dismiss_please_connect_if_present(self):
@@ -96,18 +191,82 @@ class Navigation:
         except TimeoutError:
             pass
 
+    async def _calibrate_once(self):
+        """Run one calibration cycle: rotate left, confirm, rotate right, confirm."""
+        await self.device_emulator.turn_left()
+        await self.click_image(
+            "calibrate/click_confirm.png", region=(0.0, 0.0, 0.5, 1.0)
+        )
+        await self.device_emulator.turn_right()
+        await self.click_image(
+            "calibrate/click_confirm.png", region=(0.5, 0.0, 1.0, 1.0)
+        )
+
+    async def _detect_focused_game(self) -> Games | None:
+        """Return the game whose name label currently matches the game_center right pane."""
+        games = list(self._game_center_labels.keys())
+        paths = [self.img_dir / label for label in self._game_center_labels.values()]
+        result = await match_best_image(self.app, paths, region=(0.5, 0.0, 1.0, 1.0))
+        if result is None:
+            return None
+        return games[result[0]]
+
+    async def discover_game_center_order(self) -> list[Games]:
+        """Scroll the game_center list top-to-bottom and return the games in visual order.
+
+        Assumes the game_center page is showing with the list reset to the top. Games not
+        present for the current device (e.g. cannon_shot on strap) are simply absent from
+        the returned order.
+        """
+        order: list[Games] = []
+        timer = Timeout(
+            60.0,
+            "Could not discover the game_center order within 60 seconds",
+        )
+        while True:
+            focused = await self._detect_focused_game()
+            if focused is not None and (not order or order[-1] != focused):
+                order.append(focused)
+            if order:
+                moved = await scrollbar_drag_step(
+                    self.app,
+                    self.img_dir / "game_center" / "drag_scrollbar.png",
+                    step=15,
+                )
+                if not moved:
+                    break
+            else:
+                # right pane has not settled on a game yet - wait before scrolling
+                await asyncio.sleep(0.5)
+            timer.check()
+        return order
+
+    async def reset_game_center_scroll(self, top_game: Games):
+        """Scroll the game_center list back up until `top_game` is focused."""
+        while True:
+            if await self._detect_focused_game() == top_game:
+                return
+            if not await scrollbar_drag_step(
+                self.app,
+                self.img_dir / "game_center" / "drag_scrollbar.png",
+                step=15,
+                direction=-1,
+            ):
+                return
+
     async def detect_current_page(self, timeout: float | None = None) -> Pages:
         if timeout is None:
             uptime = self.app.uptime()
             if uptime is not None and uptime < 30.0:
                 timeout = 15.0
             else:
-                timeout = 2.0
+                timeout = 10.0
         timer = Timeout(
             timeout,
             f"Current page not detected within {timeout} seconds",
         )
         detected_page = None
+        attempts = 0
         while True:
             try:
                 await self.app.ensure_window()
@@ -150,7 +309,7 @@ class Navigation:
                     elif await self.locate("game/assert_pause_title.png"):
                         detected_page = Pages.pause_menu
                     elif (
-                        await self.locate("sphere_runner/assert_score.png")
+                        await self.locate_max("game/assert_score.png", 0.8)
                         or await self.locate("each_game/assert_fruitfrenzy.png")
                         # the rest of each_game/assert_*.png are disabled - too generic
                         # (thin bars / plain dots / repeating patterns / blurry crops),
@@ -177,6 +336,20 @@ class Navigation:
                 if not detected_page.has(PageTags.game):
                     self.state_machine.udpate_game(Games.no_game)
                 return detected_page
+            attempts += 1
+            if attempts == 3:
+                await self._debug_dump_screen(
+                    [
+                        "game/assert_score.png",
+                        "each_game/assert_fruitfrenzy.png",
+                        "each_game/click_play.png",
+                        "calibrate/assert_title.png",
+                        "calibrate/click_confirm.png",
+                        "movement_selection/assert_title.png",
+                        "game/assert_pause_title.png",
+                        "game_center/assert_title.png",
+                    ]
+                )
             timer.check()
             await asyncio.sleep(0.2)
 
@@ -257,6 +430,13 @@ class Navigation:
             await self._login_email_password(therapist_username)
             if timeout is None:
                 timeout = 40.0
+        elif transition.matches(Pages.introduction, Pages.home):
+            # first-time onboarding: enter -> skip blob -> name -> confirm
+            await self.click_image("introduction/click_enter.png")
+            await self.click_image("introduction/click_skip.png", timeout=10)
+            await self.click_image("introduction/click_name_field.png")
+            await type_text("visualTesting", interval=0.05)
+            await self.click_image("introduction/click_confirm.png")
         elif transition.matches(Pages.settings, Pages.home):
             await self.click_image("settings/click_back.png")
         elif transition.matches(Pages.settings, Pages.login):
@@ -290,7 +470,23 @@ class Navigation:
         elif transition.matches(Pages.position_selection, Pages.game_center):
             await self.click_image("position_selection/click_head.png", 0.95)
         elif transition.matches(Pages.movement_selection, Pages.calibrate):
-            await self.click_image("movement_selection/click_head_down.png", 0.95)
+            game = transition.old.game
+            two_cycle = self._two_cycle_movements.get(game)
+            if two_cycle is not None:
+                first, second = two_cycle
+                await self.click_image(first, 0.95)
+                await self._calibrate_once()
+                await self.click_image(second, 0.95)
+                await self._calibrate_once()
+                await self.click_image_max(
+                    "each_game/click_play.png", confidence=0.75, timeout=10
+                )
+                await self.device_emulator.reset_rotation()
+            else:
+                click = self._movement_select_clicks.get(
+                    game, self._movement_select_default
+                )
+                await self.click_image(click, 0.95)
         elif transition.matches(Pages.game_center, Pages.achievements):
             await self.click_image("game_center/click_achievement.png")
         elif transition.matches(Pages.game_center, Pages.position_selection):
@@ -309,22 +505,19 @@ class Navigation:
                 target_region=(0.5, 0.0, 1.0, 1.0),
             )
             if bbox is None:
-                # game not present in this build - skip instead of failing
-                logging.info(f"Skipping {target_game.value}: not found in game center")
+                # game not present for the strap device - skip it
                 return True
             await self.click_image("game_center/click_start_play.png")
             self.pending_game = target_game
         elif transition.matches(Pages.calibrate, Pages.gameplay):
-            await self.device_emulator.turn_left()
-            await self.click_image(
-                "calibrate/click_confirm.png", region=(0.0, 0.0, 0.5, 1.0)
-            )
-            await self.device_emulator.turn_right()
-            await self.click_image(
-                "calibrate/click_confirm.png", region=(0.5, 0.0, 1.0, 1.0)
-            )
+            await self._calibrate_once()
             # an instruction popup appears after calibration - click play to begin the game
-            await self.click_image("each_game/click_play.png", timeout=10)
+            await self.click_image_max(
+                "each_game/click_play.png", confidence=0.75, timeout=10
+            )
+            # calibration left the device rotated "right" - return it to center so the
+            # game starts neutral instead of carrying that leftover rotation
+            await self.device_emulator.reset_rotation()
         elif transition.matches(PageTags.game, Pages.pause_menu):
             await self.click_image("game/click_menu.png")
         elif transition.matches(Pages.pause_menu, Pages.home):
