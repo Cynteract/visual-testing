@@ -24,6 +24,12 @@ env = load_env_file()
 def pytest_addoption(parser):
     parser.addoption("--test-id", action="store", default="default")
     parser.addoption(
+        "--smoke-from",
+        choices=[game.value for game in Games if game != Games.no_game],
+        default=None,
+        help="Start the smoke test at this discovered game; by default run all games.",
+    )
+    parser.addoption(
         "--binary-path",
         action="store",
         default=env.get("BINARY_PATH"),

@@ -21,6 +21,8 @@ class PlayerLogMonitor:
                 self.last_position = f.tell()
 
         async def __aexit__(self, exc_type, exc_val, exc_tb):
+            if exc_type is not None:
+                return False
             timer = Timeout(
                 self.timeout,
                 f"Expected log entry '{self.expected_entry}' not found within {self.timeout} seconds",

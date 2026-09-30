@@ -1,48 +1,46 @@
+import logging
+
 import pytest
 
-from robot.config import get_small_image_dir
 from robot.device_emulator import DeviceEmulator
 from robot.navigation import Navigation
 from robot.pages import Pages
-
-img_dir = get_small_image_dir()
+from robot.states import Games
 
 
 @pytest.mark.asyncio
 async def test_smoke(
-    app, navigation: Navigation, device_emulator: DeviceEmulator, test_id
+    app, navigation: Navigation, device_emulator: DeviceEmulator, test_id, pytestconfig
 ):
-    # Discover the games present in this build, in the game_center list's top-to-bottom
-    # (visual) order. The scroll only moves down, so the loop must visit games in that
-    # same order - iterating Games enum order instead is what caused later games to be
-    # skipped (they sit above the bottom after an earlier game was scrolled past).
+    import asyncio
+
+    # Establish the patient session before discovering or launching games.
+    await navigation.go_to_page(Pages.home)
+    await device_emulator.connect("strap")
+
+    # discover the games in the game_center list's top-to-bottom order (the scroll
+    # only moves down, so the loop must visit them in that same visual order)
     await navigation.go_to_page(Pages.game_center)
     games = await navigation.discover_game_center_order()
-    print(f"DISCOVERED: {[g.value for g in games]}")
-    await navigation.reset_game_center_scroll()
+    assert games, "No games discovered in the game center"
+    logging.info("Discovered games: %s", ", ".join(game.value for game in games))
+    await navigation.reset_game_center_scroll(games[0])
+    logging.info("Game list reset in place to %s", games[0].value)
+    start_game = pytestconfig.getoption("smoke_from")
+    if start_game is not None:
+        names = [game.value for game in games]
+        assert start_game in names, f"Requested game {start_game} not found: {names}"
+        games = games[names.index(start_game):]
+        logging.info("Running games from %s: %s", start_game, ", ".join(game.value for game in games))
 
     for game in games:
-        print(f"-> entering {game.value}")
-        # enter the game: game_center -> scroll -> start -> calibrate -> gameplay
-        try:
-            await navigation.go_to_page(Pages.gameplay, game)
-        except ValueError as e:
-            if "Transition loop detected" in str(e):
-                continue
-            raise
+        logging.info("Smoke test: %s", game.value)
+        await navigation.go_to_page(Pages.gameplay, game)
 
-        # deep check only for sphere_runner (the only game with gameplay asserts so far)
-        # TEMPORARILY DISABLED to verify the game_center loop end-to-end; re-enable
-        # after the far_left/far_right flakiness is resolved.
-        # if game == Games.sphere_runner:
-        #     await device_emulator.turn_far_left()
-        #     await assert_image(
-        #         app, img_dir / "sphere_runner/assert_far_left.png", confidence=0.95
-        #     )
-        #     await device_emulator.turn_far_right()
-        #     await assert_image(
-        #         app, img_dir / "sphere_runner/assert_far_right.png", confidence=0.95
-        #     )
+        # let the game settle before pausing out of it
+        await asyncio.sleep(5)
 
-        # quit back to home: gameplay -> pause_menu -> home
+        # quit back to home
         await navigation.go_to_page(Pages.home)
+        exit_flow = "cancel, results, home" if game == Games.weekly_test else "pause, home"
+        logging.info("Smoke passed: %s (gameplay, %s)", game.value, exit_flow)

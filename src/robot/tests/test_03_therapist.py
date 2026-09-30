@@ -21,14 +21,26 @@ async def test_therapist_page(app: App, navigation: Navigation, test_id):
     await screenshot(app, "therapist", test_id)
 
     for tab, label in [
-        ("settings", "therapist_settings"),
-        ("add_user", "therapist_add_user"),
         ("user_list", "therapist_user_list"),
+        ("add_user", "therapist_add_user"),
+        ("settings", "therapist_settings"),
     ]:
         await click_image(
             app, img_dir / f"therapist/click_{tab}.png", region=_REGIONS[tab]
         )
         await screenshot(app, label, test_id)
-        await click_image(
-            app, img_dir / "therapist/click_back.png", region=_REGIONS["back"]
-        )
+        if tab == "settings":
+            from robot.utils import assert_image, click_image_max
+
+            # wait for the therapist settings page, then logout from it
+            await assert_image(
+                app, img_dir / "therapist/assert_therapist_settings.png"
+            )
+            await click_image_max(
+                app, img_dir / "therapist/click_logout.png", confidence=0.6
+            )
+            await navigation.wait_for_page(Pages.login, timeout=20)
+        else:
+            await click_image(
+                app, img_dir / "therapist/click_back.png", region=_REGIONS["back"]
+            )

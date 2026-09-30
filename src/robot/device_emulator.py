@@ -27,7 +27,12 @@ class DeviceEmulator:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if self.device_type is not None:
             # the page might change after the disconnect
-            await self.state_machine.go_towards(UIState(DeviceTypes.not_connected))
+            visited = set()
+            while self.state_machine.state.device != DeviceTypes.not_connected:
+                if self.state_machine.state in visited:
+                    raise RuntimeError("Transition loop while disconnecting the emulator")
+                visited.add(self.state_machine.state)
+                await self.state_machine.go_towards(UIState(DeviceTypes.not_connected))
 
     async def connect(self, device_name: str):
         async with self.player_log.assert_line(f"Emulator: connect {device_name}"):

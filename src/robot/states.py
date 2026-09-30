@@ -100,6 +100,10 @@ class DefinedUIState:
 
     @staticmethod
     def is_valid_uncached(state: "DefinedUIState") -> bool:
+        if state.page == Pages.weekly_results and state.game != Games.weekly_test:
+            return False
+        if state.game == Games.weekly_test and state.page in (Pages.pause_menu, Pages.feedback):
+            return False
         # game pages can only be shown if a game is selected, except for the "please_connect" page
         if state.page.has(PageTags.game) and state.game == Games.no_game:
             if state.page != Pages.please_connect:

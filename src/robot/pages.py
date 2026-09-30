@@ -24,6 +24,7 @@ class Pages(Enum):
     gameplay = "sphere_runner"
     movement_selection = "movement_selection"
     pause_menu = "pause_menu"
+    weekly_results = "weekly_results"
     # meta
     _restart = "_restart"
 
@@ -60,6 +61,7 @@ _page_tags = {
     Pages.gameplay: [PageTags.any, PageTags.device_connected, PageTags.game],
     Pages.movement_selection: [PageTags.any, PageTags.device_connected, PageTags.game],
     Pages.pause_menu: [PageTags.any, PageTags.device_connected, PageTags.game],
+    Pages.weekly_results: [PageTags.any, PageTags.device_connected, PageTags.game],
     # meta
     Pages._restart: [],
 }

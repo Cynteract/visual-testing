@@ -79,6 +79,14 @@ def _leave_game(transition: DefinedTransition) -> bool:
     return _keep_device(transition) and transition.new.game == Games.no_game
 
 
+def _weekly_test(transition: DefinedTransition) -> bool:
+    return _keep_device_and_game(transition) and transition.old.game == Games.weekly_test
+
+
+def _regular_game(transition: DefinedTransition) -> bool:
+    return _keep_device_and_game(transition) and transition.old.game != Games.weekly_test
+
+
 class Transitions:
 
     @dataclass
@@ -116,7 +124,12 @@ class Transitions:
         T(S(P.login), S(P.introduction), 1),
         T(S(P.login), S(P.login_help), 1),
         T(S(P.login), S(P.therapist_page), 1),
-        T(S(P.movement_selection), S(P.calibrate), 1),
+        T(S(P.movement_selection), S(P.calibrate), 1, _regular_game),
+        T(S(P.movement_selection), S(P.weekly_results), 1, _weekly_test),
+        T(S(P.weekly_results), S(P.calibrate), 1, _weekly_test),
+        T(S(P.weekly_results), S(P.movement_selection), 1, _weekly_test),
+        T(S(P.movement_selection), S(P.game_center), 1, _leave_game),
+        T(S(P.gameplay), S(P.weekly_results), 1, _weekly_test),
         T(S(P.therapist_page), S(P.introduction), 1),
         T(S(P.therapist_page), S(P.login), 1),
         T(S(P.pause_menu), S(P.home), 1, _leave_game),
@@ -127,7 +140,7 @@ class Transitions:
         T(S(P.position_selection), S(P.game_center), 1),
         T(S(P.settings), S(P.home), 1),
         T(S(P.settings), S(P.login), 1),
-        T(S(P.gameplay), S(P.pause_menu), 1),
+        T(S(P.gameplay), S(P.pause_menu), 1, _regular_game),
         T(S(P.startup), S(P.update), 1),
         T(S(P.update), S(P.login), 1),
         T(S(PageTags.any), S(P._restart), 10),
