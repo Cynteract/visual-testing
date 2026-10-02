@@ -44,21 +44,24 @@ def _reset_firestore():
 
 
 def _reset_auth():
-    try:
-        logging.info(
-            "Delete credentials for com.Cynteract.GameCenter.cynteract-a52e4.firebase.auth."
-        )
-        # see https://github.com/firebase/firebase-cpp-sdk/blob/ec49e5988907840e085630fbfa93b6e42ca2c465/app/src/secure/user_secure_windows_internal.cc#L175
+    # There are multiple cached Firebase auth identities on a dev machine, not just one -
+    # confirmed via `cmdkey /list`: GameCenter (prod), ConnectorIntegration (prod), and
+    # GameCenter (test project). Missing any one of these lets a session silently survive
+    # a "reset" and auto-login on the next run instead of showing the login screen.
+    # see https://github.com/firebase/firebase-cpp-sdk/blob/ec49e5988907840e085630fbfa93b6e42ca2c465/app/src/secure/user_secure_windows_internal.cc#L175
+    identifiers = [
+        "com.Cynteract.GameCenter.cynteract-a52e4.firebase.auth",
+        "com.Cynteract.ConnectorIntegration.cynteract-a52e4.firebase.auth",
+        "com.Cynteract.GameCenter.cynteract-test.firebase.auth",
+    ]
+    for identifier in identifiers:
         for i in [0, 1]:
-            subprocess.run(
-                [
-                    "cmdkey",
-                    f"/delete:com.Cynteract.GameCenter.cynteract-a52e4.firebase.auth/__FIRAPP_DEFAULT[{i}]",
-                ],
-                check=True,
-            )
-    except subprocess.CalledProcessError as e:
-        logging.error(f"Error deleting credentials: {e}")
+            target = f"{identifier}/__FIRAPP_DEFAULT[{i}]"
+            try:
+                logging.info(f"Delete credential for {target}.")
+                subprocess.run(["cmdkey", f"/delete:{target}"], check=True)
+            except subprocess.CalledProcessError as e:
+                logging.error(f"Error deleting credential for {target}: {e}")
 
 
 def _reset_browser_local_storage():

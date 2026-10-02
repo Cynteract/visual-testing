@@ -27,7 +27,12 @@ class DeviceEmulator:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if self.device_type is not None:
             # the page might change after the disconnect
-            await self.state_machine.go_towards(UIState(DeviceTypes.not_connected))
+            visited = set()
+            while self.state_machine.state.device != DeviceTypes.not_connected:
+                if self.state_machine.state in visited:
+                    raise RuntimeError("Transition loop while disconnecting the emulator")
+                visited.add(self.state_machine.state)
+                await self.state_machine.go_towards(UIState(DeviceTypes.not_connected))
 
     async def connect(self, device_name: str):
         async with self.player_log.assert_line(f"Emulator: connect {device_name}"):
@@ -62,6 +67,14 @@ class DeviceEmulator:
         if self.rotation <= 1:
             await self.dev_console.run_commands([f"-10x"] * (2 - self.rotation))
             self.rotation = 2
+
+    async def reset_rotation(self):
+        """Return the device to neutral (center) rotation."""
+        if self.rotation > 0:
+            await self.dev_console.run_commands([f"+10x"] * self.rotation)
+        elif self.rotation < 0:
+            await self.dev_console.run_commands([f"-10x"] * abs(self.rotation))
+        self.rotation = 0
 
     async def device_actions(
         self,

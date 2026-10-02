@@ -28,6 +28,10 @@ env = load_env_file()
 
 assert "ROBOT_USERNAME" in env, "ROBOT_USERNAME must be set in .env file"
 assert "ROBOT_PASSWORD" in env, "ROBOT_PASSWORD must be set in .env file"
+assert (
+    "ROBOT_THERAPISTUSERNAME" in env
+), "ROBOT_THERAPISTUSERNAME must be set in .env file"
 
 username = env["ROBOT_USERNAME"]
+therapist_username = env["ROBOT_THERAPISTUSERNAME"]
 password = env["ROBOT_PASSWORD"]

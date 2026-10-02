@@ -30,22 +30,24 @@ class UIStateMachine:
     ) -> DefinedUIState:
         transition_handled = False
         self.in_transition = True
-        for action in self.transition_actions:
-            if await action(transition, wait_for_transition, timeout):
-                transition_handled = True
-                break
-        if not transition_handled:
-            raise ValueError(f"No action defined for the transition: {transition}")
+        try:
+            for action in self.transition_actions:
+                if await action(transition, wait_for_transition, timeout):
+                    transition_handled = True
+                    break
+            if not transition_handled:
+                raise ValueError(f"No action defined for the transition: {transition}")
+        finally:
+            self.in_transition = False
         # the new state is not necessarily the same as transition.new:
         # - action might have failed
         # - state might have changed differently than expected
-        self.in_transition = False
         return self.state
 
     async def go_towards(self, new: UIState) -> DefinedUIState:
         transition = self.transitions.get_next_transition(self.state, new)
         if os.environ.get("DEBUG"):
-            message = f"Trigger {self.state} → {new}"
+            message = f"Trigger {self.state} -> {new}"
             if not new.matches(transition.new):
                 message += f" via {transition.new}"
             print(message)
@@ -55,7 +57,7 @@ class UIStateMachine:
         """Trigger transition to other page without waiting for it to complete."""
         transition = self.transitions.get_next_transition(self.state, new)
         if os.environ.get("DEBUG"):
-            message = f"Trigger {self.state} → {new}"
+            message = f"Trigger {self.state} -> {new}"
             if not new.matches(transition.new):
                 message += f" via {transition.new}"
             print(message)

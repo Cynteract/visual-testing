@@ -22,11 +22,29 @@ class MultipleMatchesFoundException(Exception):
     pass
 
 
+class WindowClosedException(Exception):
+    pass
+
+
 @dataclass
 class WindowMatcher:
     pid: int | None = None
     title: str | None = None
     class_name: str | None = None
+
+
+def title_matches(actual: str, expected: str) -> bool:
+    """Match a window title against the expected page title.
+
+    Browsers append their name with a hyphen or em-dash separator (e.g.
+    "Cynteract - Google Chrome", "Cynteract — Mozilla Firefox"), so a tight prefix
+    match on those separators avoids false positives like "Cynteract Software Wiki".
+    """
+    return (
+        actual == expected
+        or actual.startswith(expected + " -")
+        or actual.startswith(expected + " —")
+    )
 
 
 class AppState(Enum):
@@ -102,7 +120,7 @@ class App:
             self.pid = process.pid
             self.state = AppState.Launched
             self.launch_time = datetime.now()
-            window_timeout = 15.0
+            window_timeout = 25.0
         else:
             self.state = AppState.Grabbed
             window_timeout = 5.0
@@ -111,6 +129,32 @@ class App:
         await self._find_window(timeout=window_timeout)
         assert self.window
         self.window.activate()
+
+    async def ensure_window(self, timeout: float = 10.0) -> None:
+        """
+        Re-acquire the app process/window if the tracked one has gone stale.
+
+        The app destroys and recreates its native window during startup (fullscreen →
+        windowed transition) and can close itself briefly on a browser popup after
+        auto-login. This re-binds self.pid and self.window to the surviving
+        process/window, raising TimeoutError if neither reappears within `timeout`.
+        """
+        if self._window_is_alive():
+            return
+        self.window = None
+        if self.file_path is None:
+            raise TimeoutError("Cannot re-acquire window: no app path to search for.")
+        if self.pid is None or not psutil.pid_exists(self.pid):
+            self.pid = None
+            await self._find_process(timeout=timeout)
+        self.window_matcher = WindowMatcher(pid=self.pid)
+        self.resize_offsets = None
+        await self._find_window(timeout=timeout)
+        self.state = AppState.Grabbed
+        try:
+            self.window.activate()
+        except Exception:
+            pass
 
     def uptime(self) -> float | None:
         """
@@ -155,7 +199,7 @@ class App:
                 _class_name = self.window_matcher.class_name
                 if _pid is not None and window.getPID() != _pid:
                     is_ok = False
-                elif _title is not None and _title != window.title:
+                elif _title is not None and not title_matches(window.title, _title):
                     is_ok = False
                 elif _class_name is not None:
                     hwnd = window.getHandle()
@@ -174,18 +218,31 @@ class App:
         """
         assert self.window, "App window is not available. Call open() first."
         self.requested_client_frame_size = (width, height)
+        await self.ensure_window()
         await self._enforce_size_once()
 
     def close(self, timeout: float = 5):
         """
         Tries to close the app defined by this App instance, waits max 5 seconds for the app to no longer be running.
         """
-        process = psutil.Process(self.pid)
-
         # cleanup
         if self.enforce_size_task:
             self.enforce_size_task.cancel()
             self.enforce_size_task = None
+
+        if self.pid is None:
+            self.state = AppState.Closed
+            self.window = None
+            return
+
+        try:
+            process = psutil.Process(self.pid)
+        except psutil.NoSuchProcess:
+            # the app already exited (e.g. its startup fullscreen→windowed self-restart)
+            self.state = AppState.Closed
+            self.pid = None
+            self.window = None
+            return
 
         # try to close the app gracefully first
         wait = False
@@ -223,6 +280,7 @@ class App:
 
     async def _enforce_size_once(self):
         assert self.window, "App window is not available. Call open() first."
+        self._assert_window_alive()
         if self.window.isMinimized or self.window.isMaximized:
             # set window to floating state
             restoreOk = self.window.restore(wait=True)
@@ -267,7 +325,16 @@ class App:
         try:
             while True:
                 if self.window:
-                    await self._enforce_size_once()
+                    try:
+                        await self._enforce_size_once()
+                    except WindowClosedException:
+                        # the app recreated its window (startup fullscreen→windowed, or a
+                        # browser popup after auto-login) - re-acquire and keep enforcing
+                        logging.info("Window closed, re-acquiring in enforce_size routine.")
+                        try:
+                            await self.ensure_window()
+                        except TimeoutError:
+                            pass
                 await asyncio.sleep(0.5)
         except asyncio.CancelledError:
             pass
@@ -281,12 +348,54 @@ class App:
         with PIL.ImageGrab.grab(bbox=bbox) as img:
             img.save(save_path)
 
+    def _window_is_alive(self) -> bool:
+        if self.window is None:
+            return False
+        try:
+            if not win32gui.IsWindow(self.window.getHandle()):
+                return False
+            frame = self.window.getClientFrame()
+            return (frame.right - frame.left) > 0 and (frame.bottom - frame.top) > 0
+        except Exception:
+            return False
+
+    def _assert_window_alive(self):
+        """
+        Raises WindowClosedException if the tracked window has been destroyed - e.g. a
+        browser popup closing itself after an auto-login. Cheaper and safer than letting
+        pywinctl touch a dead handle, which raises a raw pywintypes.error instead of a
+        clear, specific exception.
+        """
+        assert self.window, "App window is not available. Call open() first."
+        if not win32gui.IsWindow(self.window.getHandle()):
+            raise WindowClosedException(
+                f"The tracked window (pid={self.pid}) was closed unexpectedly."
+            )
+
+    def get_window_point(self, fx: float, fy: float) -> tuple[int, int]:
+        """
+        Converts a fractional point within the window (0.0-1.0 on each axis, same
+        convention as `locate`'s `region` parameter) to an absolute screen coordinate.
+        """
+        bbox = self._get_bounding_box()
+        return (
+            int(bbox[0] + fx * (bbox[2] - bbox[0])),
+            int(bbox[1] + fy * (bbox[3] - bbox[1])),
+        )
+
     def _get_bounding_box(self) -> tuple[int, int, int, int]:
         """
         Returns the bounding box of the app window.
         """
         assert self.window, "App window is not available. Call open() first."
         client_frame = self.window.getClientFrame()
+        if (
+            client_frame.right <= client_frame.left
+            or client_frame.bottom <= client_frame.top
+        ):
+            raise WindowClosedException(
+                f"The tracked window (pid={self.pid}) has zero size."
+            )
         return (
             client_frame.left,
             client_frame.top,
@@ -356,6 +465,10 @@ class App:
         Returns: (x1, y1, x2, y2) of the found image on the screen or None
         """
         assert self.window, "App window is not available. Call open() first."
+        try:
+            self._assert_window_alive()
+        except WindowClosedException:
+            await self.ensure_window()
         if confidence is None:
             confidence = 0.9
         if region is None:
