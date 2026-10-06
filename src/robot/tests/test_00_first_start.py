@@ -28,13 +28,19 @@ async def test_first_start_login(
     # the browser might cover the Cynteract window
     await navigation.trigger_transition(Pages.login)
 
-    # a cached session can make the app auto-login and skip the login page entirely -
-    # only attempt the browser-based login if we actually land on it
+    # The browser form can open without the app showing its legacy Login page.
+    # Start browser automation directly instead of waiting for that old screen.
     try:
-        await navigation.wait_for_page(Pages.login, timeout=20)
         await login_with_browser_cookie_absent(username, password, test_id)
-    except TimeoutError:
-        pass
+    except TimeoutError as login_error:
+        # A cached browser session may bypass the form. Only accept that case
+        # when the app actually reaches a logged-in page; retain the original
+        # browser error otherwise, rather than hiding it behind a generic timeout.
+        try:
+            await _assert_logged_in(app, navigation, timeout=40)
+        except TimeoutError:
+            raise login_error
+        return
 
     # assert logged in - app fetches player data ("Checking for your previous data...")
     # after login (browser-based or auto-login) completes, before showing home/introduction

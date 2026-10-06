@@ -25,6 +25,11 @@ _SLIDER_INVERTED = {Games.gravity_gambit}
 # so the far-left/far-right slider check does not apply.
 _SLIDER_SKIP = {Games.weekly_test}
 
+# arcade games whose round may already be over ("Game Finished" screen) when the
+# movement check runs; recover once by clicking Restart so the next input can
+# still be verified.
+_GAME_OVER_RESTART = {Games.brick_breaker, Games.asteroid_storm}
+
 
 def input_slider_match(app, direction, invert=False):
     """Match the cyan track silhouette, excluding white handles and background."""
@@ -90,17 +95,17 @@ async def test_smoke(
 
             async def restart_if_finished():
                 nonlocal restart_used
-                if game != Games.brick_breaker or not await navigation.locate_max(
+                if game not in _GAME_OVER_RESTART or not await navigation.locate_max(
                     "game/assert_game_finished.png", 0.95,
                     region=(0.2, 0.1, 0.8, 0.35),
                 ):
                     return False
                 if restart_used:
                     raise AssertionError(
-                        "brick_breaker: game finished again after the single recovery restart"
+                        f"{game.value}: game finished again after the single recovery restart"
                     )
                 restart_used = True
-                await screenshot(app, "brick_breaker_before_restart", test_id)
+                await screenshot(app, f"{game.value}_before_restart", test_id)
                 # Reset the actual device before restarting; changing only the
                 # tracked rotation would make the next incremental input wrong.
                 await device_emulator.reset_rotation()
@@ -109,7 +114,7 @@ async def test_smoke(
                     region=(0.2, 0.25, 0.5, 0.5),
                 )
                 await navigation.wait_for_page(Pages.gameplay)
-                logging.info("Brick Breaker restarted; retaining verified movement checks")
+                logging.info("%s restarted; retaining verified movement checks", game.value)
                 return True
 
             try:
@@ -147,7 +152,7 @@ async def test_smoke(
                         await asyncio.sleep(0.2)
                     await screenshot(app, f"{game.value}_far_{direction}", test_id)
                     logging.info("Movement passed: %s input %s, slider %s", game.value, direction, endpoint)
-                if game == Games.brick_breaker:
+                if game in _GAME_OVER_RESTART:
                     # Stop the round before the console round-trip needed to
                     # restore neutral; otherwise the last lives can expire.
                     await restart_if_finished()

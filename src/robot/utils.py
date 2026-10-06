@@ -270,6 +270,14 @@ def foreground_template(image_path: Path, target, foreground_only: bool):
     if foreground_only and image_path.name == "click_menu.png":
         foreground_range = (220, 255)
         target = cv2.inRange(target[:, :20], *foreground_range)
+    elif foreground_only and image_path.name in (
+        "assert_game_finished.png", "click_finished_restart.png",
+    ):
+        # Isolate the bright "Game Finished" text / Restart button on its dark
+        # panel; drop the dark backdrop so a differing game scene behind the
+        # overlay cannot affect the score.
+        foreground_range = (150, 255)
+        target = cv2.inRange(target, *foreground_range)
     elif foreground_only:
         # Match the blue icon's silhouette rather than its captured backdrop.
         # Keeping the silhouette's empty pixels also rejects solid bright patches.

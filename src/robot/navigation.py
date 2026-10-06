@@ -20,6 +20,16 @@ from robot.utils import (
 )
 
 
+# game UI images matched by their bright/text silhouette only (background masked),
+# so a differing backdrop behind the overlay cannot affect the match.
+_FOREGROUND_ONLY_IMAGES = (
+    "game/click_home.png",
+    "game/click_menu.png",
+    "game/assert_game_finished.png",
+    "game/click_finished_restart.png",
+)
+
+
 class Navigation:
     img_dir = get_small_image_dir()
 
@@ -116,7 +126,7 @@ class Navigation:
         from robot.utils import foreground_template
         target, foreground_range = foreground_template(
             self.img_dir / relative_image_path, target,
-            relative_image_path in ("game/click_home.png", "game/click_menu.png"),
+            relative_image_path in _FOREGROUND_ONLY_IMAGES,
         )
         if foreground_range is not None:
             region_img = cv2.inRange(region_img, *foreground_range)
@@ -163,7 +173,7 @@ class Navigation:
             region=region,
             timeout=timeout,
             scales=GAME_UI_SCALES if relative_image_path.startswith(("game/", "each_game/")) else (1.0,),
-            foreground_only=relative_image_path in ("game/click_home.png", "game/click_menu.png"),
+            foreground_only=relative_image_path in _FOREGROUND_ONLY_IMAGES,
         )
 
     async def click_at(self, x: int, y: int):
