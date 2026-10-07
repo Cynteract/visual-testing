@@ -29,7 +29,9 @@ def main(args: RobotArguments):
     assert args.binary_path is not None, "Binary path must be provided"
     # run pytest
     logging.info(f"Start robot with binary {args.binary_path} .")
-    debug_options = []
+    # fd capture replaces Windows console handles after basicConfig has bound
+    # its StreamHandler to stderr. Python-level capture keeps that handle valid.
+    debug_options = ["--capture", "sys"] if os.name == "nt" else []
     if os.environ.get("DEBUG") is not None:
         debug_options = [
             # (default --capture="fd") capture output on stdout. See https://docs.pytest.org/en/stable/reference/reference.html#cmdoption-capture
