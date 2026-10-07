@@ -16,10 +16,8 @@
   },
   "python.autoComplete.extraPaths": ["../sdk-python"],
   "python.analysis.extraPaths": ["../sdk-python"],
-  "python.testing.pytestArgs": [
-    "src/robot",
-    "--log-cli-level=INFO",
-  ],
+  "python.testing.pytestArgs": ["src/robot", "--log-cli-level=INFO"],
   "python.testing.unittestEnabled": false,
-  "python.testing.pytestEnabled": true
+  "python.testing.pytestEnabled": true,
+  "terminal.integrated.stickyScroll.enabled": false
 }
