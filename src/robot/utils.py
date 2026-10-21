@@ -5,7 +5,7 @@ import cv2
 import pynput
 
 from robot.app import App
-from robot.config import get_screenshot_dir
+from robot.config import get_diagnostic_dir, get_screenshot_dir
 from robot.timeout import Timeout
 
 mouse = pynput.mouse.Controller()
@@ -358,3 +358,10 @@ async def screenshot(app: App, name: str, test_id: str):
     image_path = screenshot_dir / (name + ".png")
     screenshot_dir.mkdir(parents=True, exist_ok=True)
     app.screenshot(image_path)
+
+
+async def diagnostic_screenshot(app: App, name: str, test_id: str):
+    """Capture debugging evidence without adding a visual baseline checkpoint."""
+    diagnostic_dir = get_diagnostic_dir(test_id)
+    diagnostic_dir.mkdir(parents=True, exist_ok=True)
+    app.screenshot(diagnostic_dir / (name + ".png"))

@@ -13,6 +13,10 @@ def get_screenshot_dir(test_id: str) -> Path:
     return get_data_dir(test_id) / "screenshots"
 
 
+def get_diagnostic_dir(test_id: str) -> Path:
+    return get_data_dir(test_id) / "diagnostics"
+
+
 def get_small_image_dir() -> Path:
     return Path(__file__).parent / "tests" / "images"
 

@@ -7,7 +7,7 @@ import pytest
 import pytest_asyncio
 
 from robot.app import App
-from robot.config import get_data_dir, get_frame_size
+from robot.config import get_data_dir, get_diagnostic_dir, get_frame_size
 from robot.dev_console_actions import DevConsole
 from robot.device_emulator import DeviceEmulator
 from robot.device_types import DeviceTypes
@@ -115,7 +115,7 @@ def pytest_runtest_makereport(item, call):
         assert (
             test_id is not None
         ), "test_id fixture must be used in the test to capture screenshots on failure"
-        data_dir = get_data_dir(test_id)
+        data_dir = get_diagnostic_dir(test_id)
         data_dir.mkdir(parents=True, exist_ok=True)
         with PIL.ImageGrab.grab() as img:
             img.save(data_dir / f"ERROR.png")

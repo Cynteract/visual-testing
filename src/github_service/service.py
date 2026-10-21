@@ -7,6 +7,7 @@ import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from uuid import uuid4
 
 import github
 import requests
@@ -160,7 +161,9 @@ class Service:
         )
         return version_info
 
-    async def upload_screenshots(self, version: str, branch: str) -> VRTTestResult:
+    async def upload_screenshots(
+        self, version: str, branch: str, *, test_id: str
+    ) -> VRTTestResult:
         build_result = VRTTestResult(0, 0, 0, None)
         if self.config.vrt_api_url and self.config.vrt_api_key:
             config = Config(
@@ -174,7 +177,7 @@ class Service:
             )
             with VisualRegressionTracker(config) as vrt:
                 build_result.build_url = f"{self.config.vrt_frontend_url}/{vrt.projectId}?buildId={vrt.buildId}"
-                screenshot_dir = get_screenshot_dir(version)
+                screenshot_dir = get_screenshot_dir(test_id)
                 for image_path in screenshot_dir.glob("*.png"):
                     with image_path.open("rb") as f:
                         image_data = f.read()
@@ -254,11 +257,14 @@ class Service:
             # run robot
             app_folder = await self.get_app_folder(version)
             self.config.robot_args.binary_path = str(app_folder / "Cynteract.exe")
-            self.config.robot_args.test_id = version
+            # Keep each attempt's artifacts, but never upload a previous attempt.
+            test_id = f"{version}/attempts/{uuid4().hex}"
+            self.config.robot_args.test_id = test_id
+            logging.info("Robot attempt artifacts: %s", get_data_dir(test_id))
             await async_main(self.config.robot_args)
 
             # upload screenshots
-            vrt_result = await self.upload_screenshots(version, branch)
+            vrt_result = await self.upload_screenshots(version, branch, test_id=test_id)
             if vrt_result.unresolved_count == 0 and vrt_result.new_count == 0:
                 return TestResult(
                     test_status=CommitTestStatus.SUCCESS,

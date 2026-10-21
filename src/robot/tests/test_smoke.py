@@ -11,7 +11,7 @@ from robot.device_emulator import DeviceEmulator
 from robot.navigation import Navigation
 from robot.pages import Pages
 from robot.states import Games
-from robot.utils import screenshot
+from robot.utils import diagnostic_screenshot, screenshot
 from robot.config import get_small_image_dir
 from robot.timeout import Timeout
 
@@ -105,7 +105,7 @@ async def test_smoke(
                         f"{game.value}: game finished again after the single recovery restart"
                     )
                 restart_used = True
-                await screenshot(app, f"{game.value}_before_restart", test_id)
+                await diagnostic_screenshot(app, f"{game.value}_before_restart", test_id)
                 # Reset the actual device before restarting; changing only the
                 # tracked rotation would make the next incremental input wrong.
                 await device_emulator.reset_rotation()
@@ -158,7 +158,7 @@ async def test_smoke(
                     await restart_if_finished()
                     await navigation.go_to_page(Pages.pause_menu)
             except Exception:
-                await screenshot(app, f"{game.value}_movement_failure", test_id)
+                await diagnostic_screenshot(app, f"{game.value}_movement_failure", test_id)
                 raise
             finally:
                 await device_emulator.reset_rotation()
