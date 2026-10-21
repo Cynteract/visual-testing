@@ -83,6 +83,15 @@ def reset_app_state():
 
 def reset_player_data():
     logging.info("Reset player data for user %s.", username)
+    _run_player_script("resetPlayerData")
+
+
+def reset_training_and_mood():
+    logging.info("Restore training and mood history for user %s.", username)
+    _run_player_script("restorePlayerData")
+
+
+def _run_player_script(command: str):
     subprocess.run(
         [
             "fnm",
@@ -90,7 +99,7 @@ def reset_player_data():
             "npm.cmd",
             "--",
             "run",
-            "resetPlayerData",
+            command,
             "--",
             f"--username={username}",
             f"--password={password}",
