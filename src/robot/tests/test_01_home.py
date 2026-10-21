@@ -10,6 +10,24 @@ from robot.utils import assert_image, click_image, screenshot, type_text
 img_dir = get_small_image_dir()
 
 
+async def test_introduction_page(app, navigation: Navigation, test_id):
+    if not await navigation.detect_current_page() == Pages.introduction:
+        await navigation.go_to_page(Pages.login)
+        reset_player_data()
+        await navigation.go_to_page(Pages.introduction)
+
+    assert await navigation.detect_current_page() == Pages.introduction
+    await screenshot(app, "introduction_welcome", test_id)
+    await click_image(app, img_dir / "introduction/click_enter.png")
+    await assert_image(app, img_dir / "introduction/assert_blob_face.png", timeout=10)
+    await click_image(app, img_dir / "introduction/click_skip.png")
+    await screenshot(app, "introduction_buddy_name", test_id)
+    await click_image(app, img_dir / "introduction/click_name_field.png")
+    await type_text("visualTesting", interval=0.05)
+    await click_image(app, img_dir / "introduction/click_confirm.png")
+    assert await navigation.detect_current_page() == Pages.home
+
+
 async def test_please_connect(app: App, navigation: Navigation, test_id):
     await navigation.go_to_page(Pages.please_connect)
     assert await navigation.detect_current_page() == Pages.please_connect
@@ -33,16 +51,17 @@ async def test_help_page(app, navigation: Navigation, test_id):
 
 async def test_achievements_page(app, navigation: Navigation, test_id):
     await navigation.go_to_page(Pages.achievements)
+    await asyncio.sleep(1.5)
     await screenshot(app, "achievements", test_id)
     for tab_image, name, dwell in [
-        ("achievements/click_level.png", "achievements_level", 0.5),
-        ("achievements/click_trend.png", "achievements_trend", 0.5),
-        ("achievements/click_my_diary.png", "achievements_my_diary", 0.5),
-        ("achievements/click_rank.png", "achievements_rank", 0.5),
-        ("achievements/click_achievements.png", "achievements_tab", 0.5),
-        ("achievements/click_mood.png", "achievements_mood", 0.5),
+        ("achievements/click_level.png", "achievements_level", 1.5),
+        ("achievements/click_trend.png", "achievements_trend", 1.5),
+        ("achievements/click_my_diary.png", "achievements_my_diary", 1.5),
+        ("achievements/click_rank.png", "achievements_rank", 1.5),
+        ("achievements/click_achievements.png", "achievements_tab", 1.5),
+        ("achievements/click_mood.png", "achievements_mood", 1.5),
         # the leaderboard tab fetches its rows over the network, so wait longer
-        ("achievements/click_leaderboard.png", "achievements_leaderboard", 10.0),
+        ("achievements/click_leaderboard.png", "achievements_leaderboard", 25.0),
         
     ]:
         # tabs live in the top bar, so restrict the search there to stay unique
@@ -53,21 +72,3 @@ async def test_achievements_page(app, navigation: Navigation, test_id):
         )
         await asyncio.sleep(dwell)
         await screenshot(app, name, test_id)
-
-
-async def test_introduction_page(app, navigation: Navigation, test_id):
-    if not await navigation.detect_current_page() == Pages.introduction:
-        await navigation.go_to_page(Pages.login)
-        reset_player_data()
-        await navigation.go_to_page(Pages.introduction)
-
-    assert await navigation.detect_current_page() == Pages.introduction
-    await screenshot(app, "introduction_welcome", test_id)
-    await click_image(app, img_dir / "introduction/click_enter.png")
-    await assert_image(app, img_dir / "introduction/assert_blob_face.png", timeout=10)
-    await click_image(app, img_dir / "introduction/click_skip.png")
-    await screenshot(app, "introduction_buddy_name", test_id)
-    await click_image(app, img_dir / "introduction/click_name_field.png")
-    await type_text("visualTesting", interval=0.05)
-    await click_image(app, img_dir / "introduction/click_confirm.png")
-    assert await navigation.detect_current_page() == Pages.home
