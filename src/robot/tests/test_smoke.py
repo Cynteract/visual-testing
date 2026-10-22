@@ -6,12 +6,13 @@ import numpy as np
 from PIL import ImageGrab
 
 import pytest
+from pynput.keyboard import Key
 
 from robot.device_emulator import DeviceEmulator
 from robot.navigation import Navigation
 from robot.pages import Pages
 from robot.states import Games
-from robot.utils import diagnostic_screenshot, screenshot
+from robot.utils import diagnostic_screenshot, screenshot, type_key
 from robot.config import get_small_image_dir
 from robot.timeout import Timeout
 
@@ -31,14 +32,28 @@ _SLIDER_SKIP = {Games.weekly_test}
 _GAME_OVER_RESTART = {Games.brick_breaker, Games.asteroid_storm}
 
 
-def input_slider_match(app, direction, invert=False):
+async def send_movement(game, navigation, turn):
+    pause = game in _GAME_OVER_RESTART
+    if pause:
+        await navigation.go_to_page(Pages.pause_menu)
+    await turn()
+    if pause:
+        # The command helper closes the console before returning.
+        await navigation.wait_for_page(Pages.pause_menu)
+        await type_key(Key.esc, hold=0.15)
+        await navigation.wait_for_page(Pages.gameplay)
+
+
+def input_slider_match(app, direction, invert=False, bottom_row=False):
     """Match the cyan track silhouette, excluding white handles and background."""
     if invert:
         direction = "right" if direction == "left" else "left"
     with ImageGrab.grab(bbox=app._get_bounding_box()) as capture:
         frame = cv2.cvtColor(np.asarray(capture), cv2.COLOR_RGB2BGR)
     height, width = frame.shape[:2]
-    frame = frame[int(height * 0.75):, int(width * 0.65):]
+    # Two-axis games: x-rotation drives the lower (up/down) slider.
+    top = 564 / 600 if bottom_row else 0.75
+    frame = frame[int(height * top):, int(width * 0.65):]
     reference = cv2.imread(str(get_small_image_dir() / f"sphere_runner/assert_far_{direction}.png"))
     assert reference is not None
     masks = [cv2.inRange(cv2.cvtColor(image, cv2.COLOR_BGR2HSV),
@@ -50,6 +65,8 @@ def input_slider_match(app, direction, invert=False):
     for percent in range(85, 126):
         scaled = cv2.resize(target, None, fx=percent / 100, fy=percent / 100,
                             interpolation=cv2.INTER_NEAREST)
+        if scaled.shape[0] > masks[0].shape[0] or scaled.shape[1] > masks[0].shape[1]:
+            continue
         _, score, _, point = cv2.minMaxLoc(cv2.matchTemplate(
             masks[0], scaled, cv2.TM_CCOEFF_NORMED))
         if score > best[0]:
@@ -123,13 +140,13 @@ async def test_smoke(
                     ("right", device_emulator.turn_far_right),
                 ):
                     await restart_if_finished()
-                    await turn()
+                    await send_movement(game, navigation, turn)
                     timer = Timeout(8, f"{game.value}: input {direction} did not produce the required slider endpoint")
                     while True:
                         if await restart_if_finished():
                             # This direction has not passed yet. Neutral was
                             # restored before restart, so send it again.
-                            await turn()
+                            await send_movement(game, navigation, turn)
                             timer = Timeout(8, f"{game.value}: input {direction} did not produce the required slider endpoint after restart")
                             continue
                         endpoints = ("left", "right") if first_endpoint is None else (
@@ -137,7 +154,10 @@ async def test_smoke(
                         )
                         found = False
                         for endpoint in endpoints:
-                            score, box = input_slider_match(app, endpoint, invert=game in _SLIDER_INVERTED)
+                            score, box = input_slider_match(
+                                app, endpoint, invert=game in _SLIDER_INVERTED,
+                                bottom_row=game in navigation._two_cycle_movements,
+                            )
                             if score >= 0.95 and box is not None and (
                                 slider_y is None or abs(box[1] - slider_y) < 5
                             ):
@@ -148,7 +168,13 @@ async def test_smoke(
                                 break
                         if found:
                             break
-                        timer.check()
+                        try:
+                            timer.check()
+                        except TimeoutError:
+                            logging.error("%s input %s: endpoint=%s, score=%.3f, row=%s",
+                                          game.value, direction, endpoint, score,
+                                          "bottom" if game in navigation._two_cycle_movements else "single")
+                            raise
                         await asyncio.sleep(0.2)
                     await screenshot(app, f"{game.value}_far_{direction}", test_id)
                     logging.info("Movement passed: %s input %s, slider %s", game.value, direction, endpoint)
@@ -158,9 +184,12 @@ async def test_smoke(
                     await restart_if_finished()
                     await navigation.go_to_page(Pages.pause_menu)
             except Exception:
-                await diagnostic_screenshot(app, f"{game.value}_movement_failure", test_id)
+                try:
+                    await diagnostic_screenshot(app, f"{game.value}_movement_failure", test_id)
+                except Exception:
+                    logging.exception("Could not capture movement failure")
                 raise
-            finally:
+            else:
                 await device_emulator.reset_rotation()
 
         # quit back to home
