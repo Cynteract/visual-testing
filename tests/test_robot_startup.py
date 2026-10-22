@@ -77,3 +77,25 @@ class CaptureTests(unittest.TestCase):
                     self.assertEqual(args[args.index("--capture") + 1], expected)
                 else:
                     self.assertNotIn("--capture", args)
+
+
+class IntroductionResetTests(unittest.IsolatedAsyncioTestCase):
+    async def test_reset_happens_closed_and_unexpected_home_stops_capture(self):
+        from robot.tests import test_01_home as home
+        events = []
+        app = Mock()
+        app.close.side_effect = lambda: events.append("close")
+        nav = Mock()
+        nav.detect_current_page = AsyncMock(return_value=Pages.home)
+        nav.go_to_page = AsyncMock(side_effect=lambda page: events.append("logout"))
+        with (
+            patch.object(home, "reset_app_state", side_effect=lambda: events.append("clear")),
+            patch.object(home, "reset_player_data", side_effect=lambda: events.append("delete")),
+            patch.object(home, "start_and_login", new_callable=AsyncMock) as login,
+            patch.object(home, "screenshot", new_callable=AsyncMock) as capture,
+        ):
+            login.side_effect = lambda *args: events.append("login")
+            with self.assertRaises(AssertionError):
+                await home.test_introduction_page(app, Path("app.exe"), nav, "unit")
+            capture.assert_not_awaited()
+        self.assertEqual(events, ["logout", "close", "clear", "delete", "login"])

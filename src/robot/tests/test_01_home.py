@@ -4,17 +4,20 @@ from robot.app import App
 from robot.config import get_small_image_dir
 from robot.navigation import Navigation
 from robot.pages import Pages
-from robot.reset import reset_player_data
+from robot.reset import reset_app_state, reset_player_data
+from robot.tests.test_00_first_start import start_and_login
 from robot.utils import assert_image, click_image, screenshot, type_text
 
 img_dir = get_small_image_dir()
 
 
-async def test_introduction_page(app, navigation: Navigation, test_id):
+async def test_introduction_page(app, binary_path, navigation: Navigation, test_id):
     if not await navigation.detect_current_page() == Pages.introduction:
         await navigation.go_to_page(Pages.login)
+        app.close()
+        reset_app_state()
         reset_player_data()
-        await navigation.go_to_page(Pages.introduction)
+        await start_and_login(app, binary_path, navigation, test_id)
 
     assert await navigation.detect_current_page() == Pages.introduction
     await screenshot(app, "introduction_welcome", test_id)

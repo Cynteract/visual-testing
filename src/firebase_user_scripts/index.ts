@@ -1,6 +1,6 @@
 import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
 import {
-  collection, deleteDoc, doc, getDoc, getDocsFromServer,
+  collection, deleteDoc, doc, getDoc, getDocFromServer, getDocsFromServer,
   getFirestore, Timestamp, writeBatch,
 } from "firebase/firestore";
 import type { DocumentReference } from "firebase/firestore";
@@ -117,6 +117,7 @@ if (parsedArgs["--restorePlayerData"] === true) {
 } else if (parsedArgs["--resetPlayerData"] === true) {
   console.log("Reset player data.");
   await deleteDoc(playerDoc);
+  assert.ok(!(await getDocFromServer(playerDoc)).exists(), "Player reset did not complete");
 } else {
   console.log("Print player data.");
   const docSnap = await getDoc(playerDoc);

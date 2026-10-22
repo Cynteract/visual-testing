@@ -22,6 +22,10 @@ async def test_first_start_login(
     # reset and restart app for first start experience
     reset_app_state()
     reset_training_and_mood()
+    await start_and_login(app, binary_path, navigation, test_id)
+
+
+async def start_and_login(app, binary_path, navigation, test_id):
     await app.find_or_start_by_path(binary_path)
     await app.resize_client_frame(*get_frame_size())
     app.enforce_size()

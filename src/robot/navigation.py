@@ -8,6 +8,7 @@ from robot.pages import Pages, PageTags
 from robot.state_machine import UIStateMachine
 from robot.states import Games, UIState
 from robot.timeout import Timeout
+from robot.results import LoginTransitionTimeout
 from robot.transitions import DefinedTransition
 from robot.utils import (
     GAME_UI_SCALES,
@@ -631,6 +632,11 @@ class Navigation:
             f"Failed to fire {transition} within {timeout} seconds",
         )
         while self.state_machine.state.page == transition.old.page:
-            timer.check()
+            try:
+                timer.check()
+            except TimeoutError as error:
+                if transition.old.page == Pages.login:
+                    raise LoginTransitionTimeout(str(error)) from error
+                raise
             await self.detect_current_page()
         return True
