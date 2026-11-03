@@ -6,7 +6,7 @@ from github_service.__main__ import GithubServiceConfig
 from github_service.__main__ import main as github_service_main
 from github_service.service import CommitTestStatus, format_commit_status_description
 from robot.__main__ import RobotArguments
-from shared.utils import load_env_file
+from shared.utils import DynamicStderr, load_env_file
 
 
 async def main():
@@ -83,7 +83,7 @@ def skip_commit(commit_hash: str):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(format="%(levelname)s %(message)s", level=logging.INFO)
+    logging.basicConfig(format="%(levelname)s %(message)s", level=logging.INFO, stream=DynamicStderr())
 
     env = load_env_file()
 

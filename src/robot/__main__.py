@@ -10,7 +10,7 @@ import pytest
 from robot.app import AppState
 from robot.config import get_data_dir
 from robot.results import AttemptEvidence, RobotFailure
-from shared.utils import load_env_file
+from shared.utils import DynamicStderr, load_env_file
 
 
 @dataclass
@@ -30,9 +30,7 @@ def main(args: RobotArguments):
     assert args.binary_path is not None, "Binary path must be provided"
     # run pytest
     logging.info(f"Start robot with binary {args.binary_path} .")
-    # fd capture replaces Windows console handles after basicConfig has bound
-    # its StreamHandler to stderr. Python-level capture keeps that handle valid.
-    debug_options = ["--capture", "sys"] if os.name == "nt" else []
+    debug_options = []
     if os.environ.get("DEBUG") is not None:
         debug_options = [
             # (default --capture="fd") capture output on stdout. See https://docs.pytest.org/en/stable/reference/reference.html#cmdoption-capture
@@ -82,7 +80,7 @@ def main(args: RobotArguments):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(format="%(levelname)s %(message)s", level=logging.INFO)
+    logging.basicConfig(format="%(levelname)s %(message)s", level=logging.INFO, stream=DynamicStderr())
 
     env = load_env_file()
 

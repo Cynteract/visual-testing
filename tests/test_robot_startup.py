@@ -65,15 +65,15 @@ class FirstStartTests(unittest.IsolatedAsyncioTestCase):
 
 
 class CaptureTests(unittest.TestCase):
-    def test_windows_capture_and_debug_override(self):
-        for debug, expected in ((False, "sys"), (True, "no")):
+    def test_default_capture_and_debug_override(self):
+        for debug, expected in ((False, None), (True, "no")):
             with self.subTest(debug=debug), patch.dict(os.environ), patch.object(runner.AttemptEvidence, "save"), patch.object(runner.pytest, "main", return_value=0) as pytest_main:
                 os.environ.pop("DEBUG", None)
                 if debug:
                     os.environ["DEBUG"] = "1"
                 runner.main(runner.RobotArguments("app.exe", close_app_after_tests=False))
                 args = pytest_main.call_args.args[0]
-                if os.name == "nt" or debug:
+                if debug:
                     self.assertEqual(args[args.index("--capture") + 1], expected)
                 else:
                     self.assertNotIn("--capture", args)

@@ -4,7 +4,7 @@ import logging
 
 from github_service.service import GithubServiceConfig, Service
 from robot.__main__ import RobotArguments
-from setup.__main__ import load_env_file
+from shared.utils import DynamicStderr, load_env_file
 
 
 async def main(args: GithubServiceConfig):
@@ -21,7 +21,7 @@ async def main(args: GithubServiceConfig):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(format="%(levelname)s %(message)s", level=logging.INFO)
+    logging.basicConfig(format="%(levelname)s %(message)s", level=logging.INFO, stream=DynamicStderr())
 
     env = load_env_file()
     github_pat = env.get("GITHUB_PAT")
