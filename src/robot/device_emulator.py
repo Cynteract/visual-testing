@@ -16,6 +16,7 @@ class DeviceEmulator:
         self.dev_console = dev_console
         self.device_type: DeviceTypes | None = None
         self.rotation: int = 0
+        self.skip_cleanup = False
         self.state_machine = state_machine
         self.player_log = player_log
 
@@ -25,6 +26,8 @@ class DeviceEmulator:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.skip_cleanup or exc_type is not None:
+            return  # The runner closes the app after a failed attempt.
         if self.device_type is not None:
             # the page might change after the disconnect
             visited = set()
