@@ -1,10 +1,16 @@
 import os
 from collections.abc import Awaitable, Callable
+from functools import cache
 
 from robot.device_types import DeviceTypes
 from robot.pages import Pages
 from robot.states import DefinedUIState, Games, UIState
 from robot.transitions import DefinedTransition, Transitions
+
+
+@cache
+def _get_transitions():
+    return Transitions()
 
 
 class UIStateMachine:
@@ -14,7 +20,7 @@ class UIStateMachine:
         self.transition_actions: list[
             Callable[[DefinedTransition, bool, float | None], Awaitable[bool]]
         ] = []
-        self.transitions = Transitions()
+        self.transitions = _get_transitions()
 
     def register_transition_actions(
         self,
