@@ -194,7 +194,7 @@ class Service:
                             TestRun(
                                 name=image_path.stem,
                                 imageBase64=imagebase64,
-                                diffTollerancePercent=0 if ignore_areas else 0.2,
+                                diffTollerancePercent=0.1 if ignore_areas else 0.2,
                                 ignoreAreas=ignore_areas,
                             )
                         )

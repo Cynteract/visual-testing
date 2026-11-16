@@ -49,7 +49,7 @@ class SliderUploadTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(runs["home"].diffTollerancePercent, 0.2)
             movement = runs["sphere_runner_far_left"]
             self.assertEqual(len(movement.ignoreAreas), 4)
-            self.assertEqual(movement.diffTollerancePercent, 0)
+            self.assertEqual(movement.diffTollerancePercent, 0.1)
             import base64
             self.assertEqual(base64.b64decode(movement.imageBase64),
                              (Path(folder) / "sphere_runner_far_left.png").read_bytes())
