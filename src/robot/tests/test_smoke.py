@@ -3,7 +3,7 @@ import logging
 
 import cv2
 import numpy as np
-from PIL import ImageGrab
+from PIL import Image, ImageGrab
 
 import pytest
 from pynput.keyboard import Key
@@ -12,15 +12,10 @@ from robot.device_emulator import DeviceEmulator
 from robot.navigation import Navigation
 from robot.pages import Pages
 from robot.states import Games
-from robot.utils import diagnostic_screenshot, screenshot, type_key
-from robot.config import get_small_image_dir
+from robot.utils import diagnostic_screenshot, type_key
+from robot.config import get_small_image_dir, get_screenshot_dir
 from robot.timeout import Timeout
 
-
-# games whose in-game slider is mirrored relative to the sphere_runner references:
-# turning far-left moves the slider to the position that sphere_runner's
-# assert_far_right.png depicts (and vice versa).
-_SLIDER_INVERTED = {Games.gravity_gambit}
 
 # games with no free-movement slider at all (e.g. the structured weekly test),
 # so the far-left/far-right slider check does not apply.
@@ -44,12 +39,11 @@ async def send_movement(game, navigation, turn):
         await navigation.wait_for_page(Pages.gameplay)
 
 
-def input_slider_match(app, direction, invert=False, bottom_row=False):
+def input_slider_match(app, direction, bottom_row=False):
     """Match the cyan track silhouette, excluding white handles and background."""
-    if invert:
-        direction = "right" if direction == "left" else "left"
     with ImageGrab.grab(bbox=app._get_bounding_box()) as capture:
-        frame = cv2.cvtColor(np.asarray(capture), cv2.COLOR_RGB2BGR)
+        captured_frame = np.array(capture)
+        frame = cv2.cvtColor(captured_frame, cv2.COLOR_RGB2BGR)
     height, width = frame.shape[:2]
     # Two-axis games: x-rotation drives the lower (up/down) slider.
     top = 564 / 600 if bottom_row else 0.75
@@ -71,7 +65,7 @@ def input_slider_match(app, direction, invert=False, bottom_row=False):
             masks[0], scaled, cv2.TM_CCOEFF_NORMED))
         if score > best[0]:
             best = (score, (*point, scaled.shape[1], scaled.shape[0]))
-    return best
+    return *best, captured_frame
 
 
 @pytest.mark.asyncio
@@ -107,7 +101,6 @@ async def test_smoke(
         else:
             # Gameplay is detected: check both directions immediately, then exit.
             slider_y = None
-            first_endpoint = None
             restart_used = False
 
             async def restart_if_finished():
@@ -149,35 +142,27 @@ async def test_smoke(
                             await send_movement(game, navigation, turn)
                             timer = Timeout(8, f"{game.value}: input {direction} did not produce the required slider endpoint after restart")
                             continue
-                        endpoints = ("left", "right") if first_endpoint is None else (
-                            "right" if first_endpoint == "left" else "left",
+                        score, box, captured_frame = input_slider_match(
+                            app, direction,
+                            bottom_row=game in navigation._two_cycle_movements,
                         )
-                        found = False
-                        for endpoint in endpoints:
-                            score, box = input_slider_match(
-                                app, endpoint, invert=game in _SLIDER_INVERTED,
-                                bottom_row=game in navigation._two_cycle_movements,
-                            )
-                            if score >= 0.95 and box is not None and (
-                                slider_y is None or abs(box[1] - slider_y) < 5
-                            ):
-                                slider_y = box[1]
-                                if first_endpoint is None:
-                                    first_endpoint = endpoint
-                                found = True
-                                break
-                        if found:
+                        if score >= 0.95 and box is not None and (
+                            slider_y is None or abs(box[1] - slider_y) < 5
+                        ):
+                            slider_y = box[1]
                             break
                         try:
                             timer.check()
                         except TimeoutError:
                             logging.error("%s input %s: endpoint=%s, score=%.3f, row=%s",
-                                          game.value, direction, endpoint, score,
+                                          game.value, direction, direction, score,
                                           "bottom" if game in navigation._two_cycle_movements else "single")
                             raise
                         await asyncio.sleep(0.2)
-                    await screenshot(app, f"{game.value}_far_{direction}", test_id)
-                    logging.info("Movement passed: %s input %s, slider %s", game.value, direction, endpoint)
+                    screenshot_dir = get_screenshot_dir(test_id)
+                    screenshot_dir.mkdir(parents=True, exist_ok=True)
+                    Image.fromarray(captured_frame).save(screenshot_dir / f"{game.value}_far_{direction}.png")
+                    logging.info("Movement passed: %s input %s", game.value, direction)
                 if game in _GAME_OVER_RESTART:
                     # Stop the round before the console round-trip needed to
                     # restore neutral; otherwise the last lives can expire.
