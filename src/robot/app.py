@@ -524,7 +524,10 @@ class App:
         # cluster matches with a pixel distance < 4
         clustered_xloc: list[int] = []
         clustered_yloc: list[int] = []
-        for x, y in zip(xloc, yloc):
+        positions = sorted(
+            zip(xloc, yloc), key=lambda p: match[p[1], p[0]], reverse=True
+        )
+        for x, y in positions:
             # if any existing clustered point is within 4 pixels, skip this point
             if any(
                 abs(x - cx) < 4 and abs(y - cy) < 4
