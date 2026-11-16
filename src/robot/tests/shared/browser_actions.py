@@ -1,22 +1,32 @@
 import asyncio
+import logging
 import os
 
 import pynput
 
-from robot.app import App
-from robot.browser import get_browser_window_matcher
+from robot.app import App, WindowMatcher
+from robot.browser import find_browser_window, get_browser_window_matcher
 from robot.config import get_data_dir, get_frame_size, get_small_image_dir
 from robot.utils import assert_image, click_image, screenshot, type_key, type_text
 
 
 async def login_with_browser_cookie_absent(username: str, password: str, test_id: str):
-    window_matcher = get_browser_window_matcher("Cynteract")
-
     async with App() as browser:
         if os.environ.get("DEBUG") is not None:
             browser.debug_dir = get_data_dir(test_id="debug")
+        # primary: find the actual browser window by process + title, so it works
+        # regardless of what the (sometimes stale) default-browser registry claims
+        try:
+            window, browser_type = await find_browser_window("Cynteract", timeout=15)
+            browser.window = window
+            browser.window_matcher = WindowMatcher(title="Cynteract")
+            browser.window.activate()
+            logging.info(f"Using browser: {browser_type.value}")
+        except TimeoutError:
+            # fallback: registry-based matcher
+            window_matcher = get_browser_window_matcher("Cynteract")
+            await browser.find_by_window(window_matcher, timeout=15)
         # browsers and websites are screen-scale aware; the pixel-patches need to match the scale
-        await browser.find_by_window(window_matcher)
         scale = browser.get_screen_scale()
         if scale == 100:
             frame_size = get_frame_size()
@@ -33,7 +43,7 @@ async def login_with_browser_cookie_absent(username: str, password: str, test_id
         confidence = 0.8
 
         await assert_image(
-            browser, img_dir / "enter_email.png", timeout=5, confidence=confidence
+            browser, img_dir / "enter_email.png", timeout=15, confidence=confidence
         )
         await screenshot(browser, "browser_sign_in", test_id)
         await click_image(

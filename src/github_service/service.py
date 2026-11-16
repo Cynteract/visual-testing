@@ -2,14 +2,18 @@ import asyncio
 import base64
 import enum
 import logging
+import json
+from html import escape
 import sys
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from uuid import uuid4
 
 import github
 import requests
+from PIL import Image
 from github.Commit import Commit
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -23,7 +27,9 @@ from visual_regression_tracker import (
 )
 
 from robot.__main__ import RobotArguments, async_main
+from robot.results import RobotFailure
 from robot.config import get_data_dir, get_screenshot_dir
+from github_service.slider_regions import slider_ignore_areas
 
 
 @dataclass
@@ -51,6 +57,7 @@ class CommitTestStatus(str, enum.Enum):
     ROBOT_PENDING = "robot_pending"
     ROBOT_RUNNING = "robot_running"
     ROBOT_FAILURE = "robot_failure"
+    ROBOT_FLAKY = "robot_flaky"
     ROBOT_SKIPPED = "robot_skipped"
     VRT_PENDING = "vrt_pending"
     VRT_FAILURE = "vrt_failure"
@@ -160,7 +167,9 @@ class Service:
         )
         return version_info
 
-    async def upload_screenshots(self, version: str, branch: str) -> VRTTestResult:
+    async def upload_screenshots(
+        self, version: str, branch: str, *, test_id: str
+    ) -> VRTTestResult:
         build_result = VRTTestResult(0, 0, 0, None)
         if self.config.vrt_api_url and self.config.vrt_api_key:
             config = Config(
@@ -174,8 +183,10 @@ class Service:
             )
             with VisualRegressionTracker(config) as vrt:
                 build_result.build_url = f"{self.config.vrt_frontend_url}/{vrt.projectId}?buildId={vrt.buildId}"
-                screenshot_dir = get_screenshot_dir(version)
+                screenshot_dir = get_screenshot_dir(test_id)
                 for image_path in screenshot_dir.glob("*.png"):
+                    with Image.open(image_path) as screenshot_image:
+                        ignore_areas = slider_ignore_areas(image_path.stem, screenshot_image.size)
                     with image_path.open("rb") as f:
                         image_data = f.read()
                         imagebase64 = base64.b64encode(image_data).decode("utf-8")
@@ -183,7 +194,8 @@ class Service:
                             TestRun(
                                 name=image_path.stem,
                                 imageBase64=imagebase64,
-                                diffTollerancePercent=0.2,
+                                diffTollerancePercent=0.1 if ignore_areas else 0.2,
+                                ignoreAreas=ignore_areas,
                             )
                         )
                         match result.testRunResponse.status:
@@ -254,11 +266,70 @@ class Service:
             # run robot
             app_folder = await self.get_app_folder(version)
             self.config.robot_args.binary_path = str(app_folder / "Cynteract.exe")
-            self.config.robot_args.test_id = version
-            await async_main(self.config.robot_args)
+            run_id = f"{version}/attempts/{uuid4().hex}"
+            run_dir = get_data_dir(run_id)
+            run_dir.mkdir(parents=True, exist_ok=True)
+            attempts = []
+
+            def save_summary(outcome):
+                (run_dir / "summary.json").write_text(
+                    json.dumps({"outcome": outcome, "attempts": attempts}, indent=2),
+                    encoding="utf-8",
+                )
+                rows = []
+                for attempt in attempts:
+                    number = attempt["number"]
+                    rows.append(
+                        f"<li>Attempt {number}: {escape(attempt['outcome'])}"
+                        f"<p>{escape(attempt.get('error', ''))}</p>"
+                        f'<a href="{number}/report.html">Test report</a> ? '
+                        f'<a href="{number}/result.json">Failure details</a> ? '
+                        f'<a href="{number}/diagnostics/">Diagnostics</a> ? '
+                        f'<a href="{number}/Player.log">App log (if available)</a></li>'
+                    )
+                (run_dir / "summary.html").write_text(
+                    '<!doctype html><meta charset="utf-8"><title>Robot attempts</title>'
+                    f"<h1>{escape(outcome)}</h1><ol>{''.join(rows)}</ol>",
+                    encoding="utf-8",
+                )
+                logging.info("Robot run summary: %s", run_dir / "summary.html")
+
+            max_attempts = 3
+            for number in range(1, max_attempts + 1):
+                test_id = f"{run_id}/{number}"
+                self.config.robot_args.test_id = test_id
+                # The runner closes the app before returning; the first suite test
+                # resets local state and relaunches it on each attempt.
+                self.config.robot_args.close_app_after_tests = True
+                logging.info("Robot attempt %s artifacts: %s", number, get_data_dir(test_id))
+                try:
+                    await async_main(self.config.robot_args)
+                except Exception as error:
+                    attempts.append({"number": number, "outcome": "failed", "error": str(error)})
+                    save_summary("failed")
+                    if number < max_attempts and isinstance(error, RobotFailure) and error.retryable:
+                        logging.warning("Robot attempt %s failed; starting attempt %s of %s", number, number + 1, max_attempts)
+                        continue
+                    raise
+                attempts.append({"number": number, "outcome": "passed"})
+                save_summary("flaky: passed on retry" if number > 1 else "passed")
+                break
 
             # upload screenshots
-            vrt_result = await self.upload_screenshots(version, branch)
+            try:
+                vrt_result = await self.upload_screenshots(version, branch, test_id=test_id)
+            except Exception as error:
+                save_summary("VRT upload error; " + ("robot flaky" if len(attempts) > 1 else "robot passed"))
+                return TestResult(
+                    test_status=CommitTestStatus.ERROR,
+                    details=f"VRT upload failed: {error}",
+                )
+            if len(attempts) > 1:
+                return TestResult(
+                    test_status=CommitTestStatus.ROBOT_FLAKY,
+                    details=f"Passed on retry after test failure; investigation required ({len(attempts)} attempts)",
+                    target_url=vrt_result.build_url,
+                )
             if vrt_result.unresolved_count == 0 and vrt_result.new_count == 0:
                 return TestResult(
                     test_status=CommitTestStatus.SUCCESS,
@@ -392,6 +463,7 @@ class Service:
                 return CommitTestStatus.ERROR
         elif (
             commit_test_status is CommitTestStatus.ROBOT_FAILURE
+            or commit_test_status is CommitTestStatus.ROBOT_FLAKY
             or commit_test_status is CommitTestStatus.ROBOT_SKIPPED
             or commit_test_status is CommitTestStatus.SUCCESS
             or commit_test_status is CommitTestStatus.VRT_FAILURE

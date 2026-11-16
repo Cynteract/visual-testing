@@ -13,9 +13,9 @@ img_dir = get_small_image_dir()
 async def test_email_password_login(app, navigation: Navigation, test_id):
     await navigation.go_to_page(Pages.login)
 
-    # login
-    await click_image(app, img_dir / "login/click_login_link.png")
+    # login via the internal email/password form
     await screenshot(app, "login_email_password", test_id)
+    await click_image(app, img_dir / "login/click_login_link.png")
     await click_image(app, img_dir / "login/click_email.png")
     await type_text(username, interval=0.05)
     await click_image(app, img_dir / "login/click_password.png")
@@ -27,7 +27,7 @@ async def test_email_password_login(app, navigation: Navigation, test_id):
 
 
 async def _assert_logged_in(app: App, navigation: Navigation, timeout: float):
-    timer = Timeout(timeout, "Failed to log in within {timeout} seconds")
+    timer = Timeout(timeout, f"Failed to log in within {timeout} seconds")
     while True:
         timer.check()
         try:

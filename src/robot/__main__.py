@@ -9,7 +9,8 @@ import pytest
 
 from robot.app import AppState
 from robot.config import get_data_dir
-from shared.utils import load_env_file
+from robot.results import AttemptEvidence, RobotFailure
+from shared.utils import DynamicStderr, load_env_file
 
 
 @dataclass
@@ -36,6 +37,7 @@ def main(args: RobotArguments):
             "--capture",
             "no",
         ]
+    evidence = AttemptEvidence(get_data_dir(args.test_id))
     exit_code = pytest.main(
         [
             "-x",
@@ -47,15 +49,20 @@ def main(args: RobotArguments):
             "--html",
             str(get_data_dir(args.test_id) / "report.html"),
             *debug_options,
-        ]
+        ],
+        plugins=[evidence],
     )
+    evidence.save(exit_code)
     if args.close_app_after_tests:
         from robot.app import App
 
         async def close_app():
             assert args.binary_path is not None
             async with App() as app:
-                await app.find_by_path(Path(args.binary_path), timeout=5)
+                try:
+                    await app.find_by_path(Path(args.binary_path), timeout=5)
+                except TimeoutError:
+                    return  # Already exited; there is nothing to clean up.
                 if app.state == AppState.Grabbed:
                     logging.info("Closing app after tests.")
                     app.close()
@@ -63,11 +70,17 @@ def main(args: RobotArguments):
         asyncio.run(close_app())
     if exit_code != 0:
         exit_code_name = pytest.ExitCode(exit_code).name
-        raise RuntimeError(f"Tests failed with exit code {exit_code_name}.")
+        detail = evidence.failures[0] if evidence.failures else None
+        message = (f"{detail['test']}: {detail['message']}" if detail
+                   else f"Tests failed with exit code {exit_code_name}.")
+        raise RobotFailure(
+            message,
+            retryable=exit_code == pytest.ExitCode.TESTS_FAILED and args.close_app_after_tests,
+        )
 
 
 if __name__ == "__main__":
-    logging.basicConfig(format="%(levelname)s %(message)s", level=logging.INFO)
+    logging.basicConfig(format="%(levelname)s %(message)s", level=logging.INFO, stream=DynamicStderr())
 
     env = load_env_file()
 

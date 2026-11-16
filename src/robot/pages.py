@@ -7,8 +7,12 @@ class Pages(Enum):
     login_help = "help"
     startup = "startup"
     update = "update"
+    therapist_page = "therapist_page"
     # home user
+    achievements = "achievements"
+    buddy_page = "buddy_page"
     game_center = "game_center"
+    help_page = "help_page"
     home = "home"
     introduction = "introduction"
     please_connect = "please_connect"
@@ -20,6 +24,7 @@ class Pages(Enum):
     gameplay = "sphere_runner"
     movement_selection = "movement_selection"
     pause_menu = "pause_menu"
+    weekly_results = "weekly_results"
     # meta
     _restart = "_restart"
 
@@ -39,8 +44,12 @@ _page_tags = {
     Pages.login: [PageTags.any],
     Pages.startup: [PageTags.any],
     Pages.update: [PageTags.any],
+    Pages.therapist_page: [PageTags.any],
     # home user
+    Pages.achievements: [PageTags.any],
+    Pages.buddy_page: [PageTags.any],
     Pages.game_center: [PageTags.any, PageTags.device_connected],
+    Pages.help_page: [PageTags.any],
     Pages.home: [PageTags.any],
     Pages.introduction: [PageTags.any],
     Pages.please_connect: [PageTags.any, PageTags.game],
@@ -52,6 +61,7 @@ _page_tags = {
     Pages.gameplay: [PageTags.any, PageTags.device_connected, PageTags.game],
     Pages.movement_selection: [PageTags.any, PageTags.device_connected, PageTags.game],
     Pages.pause_menu: [PageTags.any, PageTags.device_connected, PageTags.game],
+    Pages.weekly_results: [PageTags.any, PageTags.device_connected, PageTags.game],
     # meta
     Pages._restart: [],
 }

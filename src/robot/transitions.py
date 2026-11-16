@@ -79,6 +79,14 @@ def _leave_game(transition: DefinedTransition) -> bool:
     return _keep_device(transition) and transition.new.game == Games.no_game
 
 
+def _weekly_test(transition: DefinedTransition) -> bool:
+    return _keep_device_and_game(transition) and transition.old.game == Games.weekly_test
+
+
+def _regular_game(transition: DefinedTransition) -> bool:
+    return _keep_device_and_game(transition) and transition.old.game != Games.weekly_test
+
+
 class Transitions:
 
     @dataclass
@@ -96,17 +104,34 @@ class Transitions:
     # trying to keep the lines short for auto-sorting
     _base_transitions = [
         T(S(P._restart), S(P.startup), 1),
+        T(S(P.achievements), S(P.home), 1),
+        T(S(P.buddy_page), S(P.home), 1),
         T(S(P.calibrate), S(P.gameplay), 1),
         T(S(P.feedback), S(P.home), 1, _leave_game),
+        T(S(P.game_center), S(P.achievements), 1),
+        T(S(P.game_center), S(P.position_selection), 1),
         T(S(P.game_center), S(P.movement_selection), 1, _start_game),
+        T(S(P.help_page), S(P.home), 1),
+        T(S(P.home), S(P.achievements), 1),
+        T(S(P.home), S(P.buddy_page), 1),
+        T(S(P.home), S(P.help_page), 1),
         T(S(P.home), S(P.please_connect), 1, _is_not_connected),
         T(S(P.home), S(P.game_center), 1, _is_connected),
         T(S(P.home), S(P.settings), 1),
         T(S(P.introduction), S(P.home), 1),
         T(S(P.login_help), S(P.login), 1),
+        T(S(P.login), S(P.home), 1),
         T(S(P.login), S(P.introduction), 1),
         T(S(P.login), S(P.login_help), 1),
-        T(S(P.movement_selection), S(P.calibrate), 1),
+        T(S(P.login), S(P.therapist_page), 1),
+        T(S(P.movement_selection), S(P.calibrate), 1, _regular_game),
+        T(S(P.movement_selection), S(P.weekly_results), 1, _weekly_test),
+        T(S(P.weekly_results), S(P.calibrate), 1, _weekly_test),
+        T(S(P.weekly_results), S(P.movement_selection), 1, _weekly_test),
+        T(S(P.movement_selection), S(P.game_center), 1, _leave_game),
+        T(S(P.gameplay), S(P.weekly_results), 1, _weekly_test),
+        T(S(P.therapist_page), S(P.introduction), 1),
+        T(S(P.therapist_page), S(P.login), 1),
         T(S(P.pause_menu), S(P.home), 1, _leave_game),
         T(S(P.pause_menu), S(P.feedback), 2),
         T(S(P.please_connect), S(P.position_selection), 1, _is_connected),
@@ -115,11 +140,11 @@ class Transitions:
         T(S(P.position_selection), S(P.game_center), 1),
         T(S(P.settings), S(P.home), 1),
         T(S(P.settings), S(P.login), 1),
-        T(S(P.gameplay), S(P.pause_menu), 1),
+        T(S(P.gameplay), S(P.pause_menu), 1, _regular_game),
         T(S(P.startup), S(P.update), 1),
         T(S(P.update), S(P.login), 1),
         T(S(PageTags.any), S(P._restart), 10),
-        T(S(PageTags.device_connected), S(P.please_connect), 1),
+        T(S(PageTags.device_connected), S(P.please_connect), 5),
         T(S(DeviceTypes.not_connected), S(DeviceTypes.strap), 6, _keep_page_and_game),
         T(S(DeviceTypes.strap), S(DeviceTypes.not_connected), 3, _keep_page_and_game),
     ]

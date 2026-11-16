@@ -7,7 +7,7 @@ import pytest
 import pytest_asyncio
 
 from robot.app import App
-from robot.config import get_data_dir, get_frame_size
+from robot.config import get_data_dir, get_diagnostic_dir, get_frame_size
 from robot.dev_console_actions import DevConsole
 from robot.device_emulator import DeviceEmulator
 from robot.device_types import DeviceTypes
@@ -23,6 +23,12 @@ env = load_env_file()
 
 def pytest_addoption(parser):
     parser.addoption("--test-id", action="store", default="default")
+    parser.addoption(
+        "--smoke-from",
+        choices=[game.value for game in Games if game != Games.no_game],
+        default=None,
+        help="Start the smoke test at this discovered game; by default run all games.",
+    )
     parser.addoption(
         "--binary-path",
         action="store",
@@ -78,14 +84,17 @@ async def state_machine(app):
 
 @pytest_asyncio.fixture
 async def device_emulator(
-    app: App, state_machine: UIStateMachine, player_log_monitor: PlayerLogMonitor
+    app: App, state_machine: UIStateMachine, player_log_monitor: PlayerLogMonitor, request
 ):
     async with DeviceEmulator(
         DevConsole(app, player_log_monitor),
         state_machine,
         player_log_monitor,
     ) as device_emulator:
-        yield device_emulator
+        try:
+            yield device_emulator
+        finally:
+            device_emulator.skip_cleanup = getattr(request.node, "robot_failed", False)
 
 
 @pytest_asyncio.fixture
@@ -101,6 +110,8 @@ async def navigation(
 
 
 def pytest_runtest_makereport(item, call):
+    if call.excinfo is not None:
+        item.robot_failed = True
     # Check if the test raised an exception (failed)
     if call.when == "call" and call.excinfo is not None:
         logging.error(f"Test {item.name} failed!")
@@ -109,7 +120,10 @@ def pytest_runtest_makereport(item, call):
         assert (
             test_id is not None
         ), "test_id fixture must be used in the test to capture screenshots on failure"
-        data_dir = get_data_dir(test_id)
+        data_dir = get_diagnostic_dir(test_id)
         data_dir.mkdir(parents=True, exist_ok=True)
-        with PIL.ImageGrab.grab() as img:
-            img.save(data_dir / f"ERROR.png")
+        try:
+            with PIL.ImageGrab.grab() as img:
+                img.save(data_dir / "ERROR.png")
+        except Exception:
+            logging.exception("Could not capture failure screenshot")

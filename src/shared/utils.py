@@ -1,6 +1,15 @@
 import logging
 import os
+import sys
 import time
+
+
+class DynamicStderr:
+    def write(self, message):
+        return sys.stderr.write(message)
+
+    def flush(self):
+        return sys.stderr.flush()
 
 
 def load_env_file() -> dict[str, str]:
